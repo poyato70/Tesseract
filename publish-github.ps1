@@ -26,17 +26,19 @@ try {
         git commit -F (Join-Path $PSScriptRoot 'docs\relatorios\commit-missao-22.txt') | Out-Host
     }
 
+    # comandos nativos escrevem progresso em stderr: não tratar como exceção
+    $ErrorActionPreference = 'Continue'
     $exists = $true
-    gh repo view "$owner/$repo" --json name 2>$null | Out-Null
+    $null = cmd /c "gh repo view $owner/$repo --json name >nul 2>nul"
     if ($LASTEXITCODE -ne 0) { $exists = $false }
 
     if (-not $exists) {
-        gh repo create "$owner/$repo" --private --description 'Tesseract — FinOps & IA: integrações MCP, agentes e observabilidade' --source . --remote origin --push | Out-Host
+        gh repo create "$owner/$repo" --private --description 'Tesseract - FinOps e IA: integracoes MCP, agentes e observabilidade' --source . --remote origin --push 2>&1 | Out-Host
     } else {
         if (-not (git remote 2>$null | Select-String -SimpleMatch 'origin')) {
             git remote add origin "https://github.com/$owner/$repo.git"
         }
-        git push -u origin main | Out-Host
+        git push -u origin main 2>&1 | Out-Host
     }
     if ($LASTEXITCODE -ne 0) { throw "Push falhou (código $LASTEXITCODE)." }
     Write-Host ""
