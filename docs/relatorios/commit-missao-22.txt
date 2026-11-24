@@ -1,9 +1,6 @@
-Tesseract: missão 22 — rebuild, catálogo nativo de integrações e interface compacta
+docs: auditoria de capacidades e UX do Tesseract (24/11/2026)
 
-- Catálogo nativo: Azure FinOps/observabilidade, GitHub e GHES, Copilot (GitHub Models e local),
-  AWS Billing/Pricing, Google BigQuery, OpenShift, Microsoft Learn, AWS Knowledge, servidores internos.
-- Credenciais por variáveis de ambiente para conectores locais; exportação mcp.json para o Copilot.
-- Centro operacional e mapa vivo compactos; loader tesseract; guia de implantação em outro host.
+Achados por severidade (Nielsen, WCAG 2.2) e plano de correção P0-P2.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01A75SGPwDB9WW4cpceZGSuA
