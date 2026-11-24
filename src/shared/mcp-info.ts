@@ -26,7 +26,9 @@ export function describeMcp(p: {
       ],
       [
         "Autenticação",
-        p.authMode === "bearer"
+        p.authMode === "serviceAccount"
+          ? "Conta de serviço Google (token OAuth renovado pelo Tesseract)"
+          : p.authMode === "bearer"
           ? native.tokenLabel || "Token Bearer"
           : p.authMode === "env"
             ? `Variáveis de ambiente protegidas (${(native.envKeys || []).join(", ")})`

@@ -1,3 +1,4 @@
+import { ownSecret } from "../../shared/mcp-catalog.js";
 import { CopilotExport } from "./CopilotExport.js";
 import { ConnectionExplainer } from "./ConnectionExplainer.js";
 import { TesseractLoader } from "../flow/TesseractLoader.js";
@@ -68,6 +69,7 @@ function docLinks(p: IntegrationProfile): [string, string][] {
 }
 
 const authLabel: Record<string, string> = {
+  serviceAccount: "Conta de serviço Google (cofre local)",
   env: "Variáveis de credencial (cofre local)",
   application: "Entra ID · identidade de aplicação",
   delegated: "Entra ID · login delegado",
@@ -218,8 +220,8 @@ export function IntegrationDetail({
   const nodeAction = (n: (typeof graph.nodes)[number]) => {
     if (n.id === "mcp") return { label: "Tools", onClick: () => onTab("testar") };
     if (n.id === "identity")
-      return idReady || profile.authMode === "bearer"
-        ? { label: profile.authMode === "bearer" ? "Configurar" : "Credenciais", onClick: () => (profile.authMode === "bearer" ? onTab("configuracao") : onOpenAccesses()) }
+      return idReady || ownSecret(profile.authMode)
+        ? { label: ownSecret(profile.authMode) ? "Configurar" : "Credenciais", onClick: () => (ownSecret(profile.authMode) ? onTab("configuracao") : onOpenAccesses()) }
         : { label: "Ativar", onClick: () => onConnectIdentity(profile) };
     if (n.id === "target") return { label: "Detalhes", onClick: () => onTab("atividade") };
     if (n.id === "service") return { label: "Detalhes", onClick: () => setSelected("service") };
@@ -414,7 +416,7 @@ export function IntegrationDetail({
                           {!s.done && <small>{s.hint}</small>}
                         </span>
                         {!s.done && life.next?.id === s.id && (
-                          <button type="button" className="lx-btn lx-btn--sm" onClick={() => (s.tab === "credenciais" ? (profile.authMode === "bearer" ? onTab("configuracao") : onConnectIdentity(profile)) : onTab(s.tab as IntegrationTab))}>
+                          <button type="button" className="lx-btn lx-btn--sm" onClick={() => (s.tab === "credenciais" ? (ownSecret(profile.authMode) ? onTab("configuracao") : onConnectIdentity(profile)) : onTab(s.tab as IntegrationTab))}>
                             Fazer
                           </button>
                         )}
@@ -490,7 +492,7 @@ export function IntegrationDetail({
           lastDisplay={lastDisplay}
           onChanged={onRefresh}
           identityReady={idReady}
-          onFixIdentity={() => (profile.authMode === "bearer" ? onTab("configuracao") : onConnectIdentity(profile))}
+          onFixIdentity={() => (ownSecret(profile.authMode) ? onTab("configuracao") : onConnectIdentity(profile))}
         />
       )}
 

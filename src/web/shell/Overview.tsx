@@ -25,7 +25,7 @@ import type { PublicAccessProfile } from "../../shared/connections.js";
 import { manageRequest } from "../api.js";
 import { FlowCanvas, type FlowNode, type Tone } from "../flow/FlowCanvas.js";
 import { Ring } from "../flow/Ring.js";
-import { activityBuckets, buildOperational, callSuccess, identityActiveFor, type OpNode } from "../flow/operational.js";
+import { activityBuckets, buildOperational, callSuccess, identityActiveFor, type OpNode, isBackgroundRead } from "../flow/operational.js";
 import type { IntegrationProfile } from "../integrations/model.js";
 import type { IntegrationTab } from "./routes.js";
 
@@ -96,6 +96,21 @@ export function Overview({
       extra: n.kind === "integration" && n.total ? <span className="fc-card-ring"><Ring done={n.done || 0} total={n.total} size={26} stroke={2.5} label={<small>{n.done}</small>} /></span> : undefined,
     };
   });
+  // telas estreitas: lista vertical em vez do diagrama horizontal
+  const [narrow, setNarrow] = useState(() => typeof window !== "undefined" && window.innerWidth < 760);
+  useEffect(() => {
+    const on = () => setNarrow(window.innerWidth < 760);
+    window.addEventListener("resize", on);
+    return () => window.removeEventListener("resize", on);
+  }, []);
+  const lanes = op.nodes
+    .filter((n) => n.kind === "integration" || n.kind === "apis")
+    .map((n) => {
+      const inE = op.edges.find((e) => e.to === n.id);
+      const outE = op.edges.find((e) => e.from === n.id);
+      const cred = op.nodes.find((x) => x.id === inE?.from && x.kind !== "hub");
+      return { node: n, cred, target: op.nodes.find((x) => x.id === outE?.to) };
+    });
   const buckets = activityBuckets(events, now, 15);
   const peak = Math.max(1, ...buckets.map((b) => b.total));
   const success = callSuccess(events);
@@ -103,7 +118,7 @@ export function Overview({
   const node = op.nodes.find((n) => n.id === selected);
   const profile = node?.kind === "integration" ? list.find((p) => p.id === node.refId) : undefined;
   const lastEvent = events.length ? events.reduce((m, e) => (e.time > m.time ? e : m)) : undefined;
-  const recent = [...events].sort((a, b) => b.time.localeCompare(a.time)).slice(0, 6);
+  const recent = events.filter((e) => !isBackgroundRead(e)).sort((a, b) => b.time.localeCompare(a.time)).slice(0, 6);
 
   async function toggle(p: IntegrationProfile) {
     setBusy(p.id);
@@ -142,7 +157,28 @@ export function Overview({
         </div>
       </header>
 
-      <section className="op-canvas" aria-label="Diagrama operacional">
+      {narrow && (
+        <section className="op-stack" aria-label="Fluxo operacional (lista)">
+          {lanes.map((l) => (
+            <button key={l.node.id} type="button" className={`op-lane is-${l.node.state}`} onClick={() => (l.node.kind === "integration" && l.node.refId ? onOpen(l.node.refId) : undefined)}>
+              <span className="op-lane-path">
+                <i className={`op-dot is-${l.cred?.state || "online"}`} aria-hidden="true" />
+                <small>{l.cred ? l.cred.title : "Tesseract"}</small>
+                <span aria-hidden="true">→</span>
+              </span>
+              <span className="op-lane-main">
+                <strong>{l.node.title}</strong>
+                <small>{l.node.stateLabel}</small>
+              </span>
+              <span className="op-lane-target">
+                <span aria-hidden="true">→</span> <small>{l.target?.title || "—"}</small>
+              </span>
+            </button>
+          ))}
+        </section>
+      )}
+
+      <section className="op-canvas" aria-label="Diagrama operacional" hidden={narrow}>
         <FlowCanvas
           nodes={flowNodes}
           edges={op.edges}
@@ -244,7 +280,7 @@ export function Overview({
         <section className="nm-card op-activity">
           <header>
             <h2>Atividade · 15 min</h2>
-            <small>{buckets.reduce((s, b) => s + b.total, 0)} eventos</small>
+            <small>{buckets.reduce((s, b) => s + b.total, 0)} ações · sem leituras automáticas</small>
           </header>
           <div className="nm-bars" role="img" aria-label="Eventos por minuto nos últimos 15 minutos">
             {buckets.map((b, i) => (
@@ -315,7 +351,7 @@ export function Overview({
               Atividade →
             </button>
           </header>
-          {!recent.length && <p className="idt-empty">Sem eventos nesta sessão.</p>}
+          {!recent.length && <p className="idt-empty">Nenhuma ação nesta sessão. Leituras automáticas da tela ficam em Atividade.</p>}
           <ol>
             {recent.map((e, i) => (
               <li key={i} className={/^[45]|fail|falh/i.test(e.status) ? "is-error" : ""}>

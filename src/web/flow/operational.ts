@@ -69,7 +69,7 @@ function spread(count: number, height: number) {
   return Array.from({ length: count }, (_, i) => start + i * gap);
 }
 
-const ownCred = (p: IntegrationProfile) => p.authMode === "bearer" || p.authMode === "env";
+const ownCred = (p: IntegrationProfile) => ["bearer", "env", "serviceAccount"].includes(p.authMode);
 
 export function identityActiveFor(p: IntegrationProfile, ctx: Pick<OpContext, "activeAccessId" | "principalKind">) {
   return !!p.accessId && ctx.activeAccessId === p.accessId && (p.authMode === "application" ? ctx.principalKind === "application" : ctx.principalKind === "user");
@@ -217,16 +217,32 @@ export function buildOperational(ctx: OpContext) {
 }
 
 /** Eventos por minuto, do mais antigo ao mais recente. */
+/** Leituras automáticas da própria interface (polling): não são atividade. */
+export function isBackgroundRead(e: DiagnosticEvent) {
+  return e.source === "Aplicação local" && /^GET /.test(e.operation);
+}
+
+/**
+ * Falha operacional: execução/conexão MCP falhou, erro do servidor (5xx) ou
+ * credencial recusada (401/403). Dados inválidos (400/404/409/422) não contam.
+ */
+export function isOperationalFailure(e: DiagnosticEvent) {
+  if (/failed|falh/i.test(e.status)) return true;
+  if (/^5/.test(e.status)) return true;
+  return /^40[13]$/.test(e.status);
+}
+
 export function activityBuckets(events: DiagnosticEvent[], now: number, minutes = 15) {
   const buckets = Array.from({ length: minutes }, (_, i) => ({ start: now - (minutes - i) * 60_000, total: 0, calls: 0, errors: 0 }));
   for (const e of events) {
+    if (isBackgroundRead(e)) continue;
     const t = Date.parse(e.time);
     const idx = Math.floor((t - (now - minutes * 60_000)) / 60_000);
     if (idx < 0 || idx >= minutes) continue;
     const b = buckets[idx];
     b.total++;
     if (/\/mcp-connections\/[^/]+\/call$/.test(e.operation)) b.calls++;
-    if (/^[45]/.test(e.status) || /failed|falh/i.test(e.status)) b.errors++;
+    if (isOperationalFailure(e)) b.errors++;
   }
   return buckets;
 }

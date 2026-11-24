@@ -29,12 +29,14 @@ import {
   httpAudience,
   independentMcp,
 } from "./presets.js";
-import { nativePreset, parseEnvSecret, azureNamespaces } from "../../shared/mcp-catalog.js";
+import { nativePreset, parseEnvSecret, azureNamespaces, ownSecret } from "../../shared/mcp-catalog.js";
+import { googleAccessToken, parseServiceAccount } from "./google-token.js";
 import { resolveRunner } from "./runner.js";
 import {
   descriptor,
   authorizeTool,
   reviewable,
+  reviewReason,
   safeToolResult,
 } from "./tool-policy.js";
 const BASE_ENV = [
@@ -155,7 +157,7 @@ export class McpRegistry {
           `Endpoint fora do padrão oficial de ${native.label}. ${native.endpointHint || native.endpoint || ""}`.trim(),
         );
     }
-    if (!independentMcp(v) && ["bearer", "env"].includes(v.authMode))
+    if (!independentMcp(v) && ownSecret(v.authMode))
       throw new AppError(
         "invalid_request",
         "Use a identidade Microsoft deste preset.",
@@ -219,7 +221,7 @@ export class McpRegistry {
         oldRef = old?.tokenRef;
         if (
           oldRef &&
-          ["bearer", "env"].includes(v.authMode) &&
+          ownSecret(v.authMode) &&
           v.tokenAction?.kind !== "replace" &&
           v.tokenAction?.kind !== "remove" &&
           (old?.endpoint !== v.endpoint || old?.preset !== v.preset)
@@ -229,15 +231,16 @@ export class McpRegistry {
             "Ao mudar endpoint ou preset, substitua ou remova o token MCP.",
             409,
           );
-        let tokenRef = ["bearer", "env"].includes(v.authMode)
+        let tokenRef = ownSecret(v.authMode)
           ? oldRef
           : undefined;
         if (v.tokenAction?.kind === "replace") {
-          if (!independentMcp(v) || !["bearer", "env"].includes(v.authMode))
+          if (!independentMcp(v) || !ownSecret(v.authMode))
             throw new AppError(
               "invalid_request",
               "Token próprio requer autenticação Bearer ou variáveis de ambiente.",
             );
+          if (v.authMode === "serviceAccount") parseServiceAccount(v.tokenAction.value);
           if (v.authMode === "env") {
             const keys = native?.envKeys || [];
             if (!Object.keys(parseEnvSecret(v.tokenAction.value, keys)).length)
@@ -253,6 +256,11 @@ export class McpRegistry {
           throw new AppError(
             "auth_configuration",
             "Cadastre o token do endpoint MCP.",
+          );
+        if (v.authMode === "serviceAccount" && !tokenRef)
+          throw new AppError(
+            "auth_configuration",
+            "Cole o JSON da chave da conta de serviço.",
           );
         if (v.authMode === "env" && !tokenRef)
           throw new AppError(
@@ -390,6 +398,13 @@ export class McpRegistry {
                 ? undefined
                 : p.authMode === "bearer"
                   ? await this.vault.read(p.tokenRef!)
+                  : p.authMode === "serviceAccount"
+                    ? await googleAccessToken(
+                        p.id + ":" + p.configurationVersion,
+                        await this.vault.read(p.tokenRef!),
+                        nativePreset(p.preset)?.oauthScope ||
+                          "https://www.googleapis.com/auth/cloud-platform",
+                      )
                   : p.authMode === "application"
                     ? await this.identity.applications.token(a!.id, audience)
                     : await this.identity.getToken(ctx, audience);
@@ -592,6 +607,7 @@ export class McpRegistry {
       live.tools.map((t) => ({
         ...t,
         reviewable: reviewable(live.profile, t),
+        blockedReason: reviewReason(live.profile, t),
         approved: live.profile.approvedTools.some(
           (x) => x.name === t.name && x.schemaHash === t.schemaHash,
         ),

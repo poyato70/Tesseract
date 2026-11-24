@@ -9,6 +9,9 @@ import { McpLab } from "../pages/McpLab.js";
 import { advisorListArguments } from "../../shared/advisor-quick-start.js";
 import { isAdvisorProfile, resultCount, type IntegrationProfile, type LastResult, type ListedTool } from "./model.js";
 
+/** Últimos argumentos por integração+tool, só em memória da aba. */
+const lastArgs = new Map<string, Record<string, unknown>>();
+
 export function defaultArguments(profile: IntegrationProfile, tool?: ListedTool) {
   if (!tool) return {};
   if (isAdvisorProfile(profile)) {
@@ -145,7 +148,8 @@ export function ToolTester({
     setConfirmed(false);
     setExecError("");
     const t = approved.find((x) => x.name === name);
-    const value = defaultArguments(profile, t);
+    // repete os últimos argumentos usados nesta tool (memória da aba, sem segredos persistidos)
+    const value = lastArgs.get(`${profile.id}|${name}`) || defaultArguments(profile, t);
     setArgs(value);
     setJson(JSON.stringify(value, null, 2));
     setAdvanced(false);
@@ -170,6 +174,7 @@ export function ToolTester({
     data = isAdvisorProfile(profile) ? data : applyPricingDefaults(selected.name, selected.inputSchema, data);
     setExecError("");
     setRunning(true);
+    lastArgs.set(`${profile.id}|${selected.name}`, data);
     try {
       const { display, summary } = await runTool(profile, selected, data, eachCall && confirmed);
       onResult(summary, display);
@@ -249,7 +254,7 @@ export function ToolTester({
                     />
                     <span>
                       <strong>{t.name}</strong>
-                      <small>{t.reviewable ? t.description?.slice(0, 180) || "Leitura disponível para aprovação." : "Bloqueada pela política de leitura desta conexão."}</small>
+                      <small>{t.reviewable ? t.description?.slice(0, 180) || "Leitura disponível para aprovação." : (t as any).blockedReason || "Bloqueada pela política de leitura desta conexão."}</small>
                     </span>
                     {t.approved ? <CheckCircle2 size={16} className="tt-ok" aria-label="Aprovada" /> : <CircleDashed size={16} className="tt-muted" aria-label="Não aprovada" />}
                   </label>

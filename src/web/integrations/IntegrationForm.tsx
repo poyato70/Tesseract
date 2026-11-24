@@ -147,7 +147,7 @@ export function IntegrationForm({
 
   return (
     <form className="if" onSubmit={(e) => void save(e)}>
-      <div className="if-grid">
+      <div className={`if-grid${independent ? " if-grid--two" : ""}`}>
         <fieldset className="if-card">
           <legend>1 · Serviço</legend>
           <label>
@@ -218,6 +218,7 @@ export function IntegrationForm({
                   Autenticação do endpoint
                   <select value={form.authMode} onChange={(e) => field("authMode", e.target.value)}>
                     {native!.auth.includes("none") && <option value="none">Sem autenticação</option>}
+                    {native!.auth.includes("serviceAccount") && <option value="serviceAccount">Conta de serviço (recomendado)</option>}
                     {native!.auth.includes("bearer") && <option value="bearer">Token Bearer próprio</option>}
                   </select>
                 </label>
@@ -228,6 +229,13 @@ export function IntegrationForm({
                   {native?.tokenLabel || "Token do endpoint"} {initial.tokenConfigured ? "(já protegido — deixe vazio para manter)" : ""}
                   <input type="password" autoComplete="new-password" value={token} onChange={(e) => setToken(e.target.value)} required={!initial.tokenConfigured} />
                   {native?.tokenHelp && <small className="if-fine">{native.tokenHelp}</small>}
+                </label>
+              )}
+              {form.authMode === "serviceAccount" && (
+                <label>
+                  Chave JSON da conta de serviço {initial.tokenConfigured ? "— já protegida; cole só para substituir" : ""}
+                  <textarea className="if-env" rows={5} spellCheck={false} autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} placeholder='{"type": "service_account", "client_email": "...", "private_key": "-----BEGIN PRIVATE KEY-----..."}' required={!initial.tokenConfigured} />
+                  <small className="if-fine">Fica no cofre local (DPAPI). O Tesseract troca a chave por um token OAuth de 1 h e renova sozinho. Papéis: MCP Tool User, BigQuery Job User e Data Viewer no dataset de billing.</small>
                 </label>
               )}
               {form.authMode === "env" && (
@@ -243,6 +251,11 @@ export function IntegrationForm({
                     placeholder={native?.envTemplate}
                     required={!initial.tokenConfigured}
                   />
+                  {!token && native?.envTemplate && (
+                    <button type="button" className="if-link" onClick={() => setToken(native.envTemplate!)}>
+                      Inserir modelo para preencher →
+                    </button>
+                  )}
                   <small className="if-fine">Aceitas: {(native?.envKeys || []).join(", ")}. Ficam no cofre local (DPAPI) e só são entregues ao processo deste conector.</small>
                 </label>
               )}
@@ -278,6 +291,7 @@ export function IntegrationForm({
           )}
         </fieldset>
 
+        {!independent && (
         <fieldset className="if-card">
           <legend>3 · Escopo</legend>
           {form.preset === "azure" && form.transport === "stdio" && (
@@ -319,13 +333,14 @@ export function IntegrationForm({
                 <input value={context[k] || ""} onChange={(e) => setCtx(k, e.target.value)} />
               </label>
             ))}
-          {independent && <p className="if-fine">O escopo é definido pelo próprio servidor MCP.</p>}
+
           <details>
             <summary>Contexto em JSON (avançado)</summary>
             <textarea rows={5} placeholder={JSON.stringify(context, null, 2)} value={contextJson} onChange={(e) => setContextJson(e.target.value)} />
             <small className="if-fine">Se preenchido, substitui os campos acima. Os nomes devem corresponder aos parâmetros das tools.</small>
           </details>
         </fieldset>
+        )}
       </div>
 
       <details className="if-summary">

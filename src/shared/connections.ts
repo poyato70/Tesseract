@@ -42,7 +42,7 @@ export const mcpInput = z
     transport: z.enum(["stdio", "http"]),
     endpoint: z.string().max(2048).optional(),
     accessId: id.optional(),
-    authMode: z.enum(["delegated", "application", "none", "bearer", "env"]),
+    authMode: z.enum(["delegated", "application", "none", "bearer", "env", "serviceAccount"]),
     audience: z.string().max(300).optional(),
     tokenAction: secretAction.optional(),
     allowPrivateNetwork: z.boolean().default(false),

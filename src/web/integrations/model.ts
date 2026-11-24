@@ -1,4 +1,4 @@
-import { nativePreset, nativePresets } from "../../shared/mcp-catalog.js";
+import { nativePreset, nativePresets, ownSecret } from "../../shared/mcp-catalog.js";
 /**
  * Modelo puro das integrações: grafo do mapa vivo, ciclo de vida e linha do
  * tempo. Nenhum valor é estimado; tudo deriva do cadastro, da sessão e dos
@@ -158,7 +158,7 @@ export function needsIdentity(p: IntegrationProfile) {
 
 export function identityReady(p: IntegrationProfile, identityActive: boolean) {
   if (p.authMode === "none") return true;
-  if (p.authMode === "bearer" || p.authMode === "env") return !!p.tokenConfigured;
+  if (ownSecret(p.authMode)) return !!p.tokenConfigured;
   return identityActive;
 }
 
@@ -220,8 +220,10 @@ export function lifecycle(p: IntegrationProfile, ctx: { identityActive: boolean;
           ? "Informe o token do endpoint em Configuração."
           : p.authMode === "env"
             ? "Informe as variáveis de credencial em Configuração."
+            : p.authMode === "serviceAccount"
+              ? "Cole a chave da conta de serviço em Configuração."
           : "Ative a credencial vinculada nesta sessão.",
-      tab: p.authMode === "bearer" || p.authMode === "env" ? "configuracao" : "credenciais",
+      tab: ownSecret(p.authMode) ? "configuracao" : "credenciais",
     },
     { id: "connect", label: "Conectar", done: !!p.connected || (p.approvedTools?.length || 0) > 0, hint: "Conecte e liste as tools do servidor.", tab: "testar" },
     { id: "approve", label: "Aprovar", done: (p.approvedTools?.length || 0) > 0, hint: "Aprove ao menos uma tool de leitura.", tab: "testar" },
@@ -271,7 +273,7 @@ export function buildGraph(p: IntegrationProfile, ctx: GraphContext) {
     const entra = p.authMode === "application" || p.authMode === "delegated";
     nodes.push({
       id: "identity",
-      title: entra ? "Entra ID" : p.authMode === "env" ? "Credenciais locais" : "Token Bearer",
+      title: entra ? "Entra ID" : p.authMode === "env" ? "Credenciais locais" : p.authMode === "serviceAccount" ? "Conta de serviço" : "Token Bearer",
       subtitle: entra ? (p.authMode === "application" ? "Identidade de aplicação" : "Login delegado") : "Cofre local (DPAPI)",
       state: idReady ? "online" : "pending",
       stateLabel: idReady ? (entra ? "Ativa nesta sessão" : "Configurado") : entra ? "Ativar credencial" : "Token ausente",

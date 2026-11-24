@@ -51,6 +51,7 @@ export const menu: Group[] = [
       { id: "budgets", label: "Budgets" },
       { id: "benefits", label: "Compromissos" },
       { id: "multicloud", label: "Multicloud" },
+      { id: "copilot-seats", label: "Licenças Copilot" },
       { id: "hubs", label: "FinOps Hub" },
       { id: "finops-correlation", label: "Correlação MCP" },
       { id: "api-lab", label: "Laboratório de APIs" },

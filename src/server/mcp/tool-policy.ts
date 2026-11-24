@@ -56,6 +56,22 @@ export function validateQuery(q: string, preset: string) {
       );
   }
 }
+/** Por que a tool não pode ser aprovada (texto para a interface). */
+export function reviewReason(p: McpProfile, t: ToolDescriptor): string | undefined {
+  if (reviewable(p, t)) return undefined;
+  const n = t.name.toLowerCase();
+  if (/secret|password|token|credential/.test(n))
+    return "O nome indica acesso a segredo ou credencial; o Tesseract não aprova essas tools.";
+  if (/deploy|delete|create|update|execute_code|command|generate_query/.test(n))
+    return "O nome indica escrita, execução de código ou geração de comando; só leituras podem ser aprovadas.";
+  if (/list_tools|mcp_tool/.test(n)) return "Tool de meta-execução (chama outras tools); bloqueada.";
+  const native = nativePreset(p.preset);
+  if (native?.independent) {
+    if (t.annotations?.destructiveHint === true) return "O servidor marcou esta tool como destrutiva (destructiveHint).";
+    return "O servidor não declarou esta tool como somente leitura (readOnlyHint). Peça ao mantenedor do servidor para anotar, ou use o modo somente leitura do servidor.";
+  }
+  return "Fora da lista de leituras revisadas para este serviço Microsoft.";
+}
 export function reviewable(p: McpProfile, t: ToolDescriptor) {
   const n = t.name.toLowerCase();
   if (

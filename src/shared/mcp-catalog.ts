@@ -16,7 +16,11 @@ export type CatalogGroup =
   | "conhecimento"
   | "colaboracao";
 
-export type NativeAuth = "none" | "bearer" | "env";
+export type NativeAuth = "none" | "bearer" | "env" | "serviceAccount";
+
+/** Modos em que o segredo é guardado no cofre do Tesseract. */
+export const ownSecretModes = ["bearer", "env", "serviceAccount"];
+export const ownSecret = (mode?: string) => !!mode && ownSecretModes.includes(mode);
 
 export type Runner = {
   /** Executável procurado no PATH do host do Tesseract. */
@@ -53,6 +57,8 @@ export type NativePreset = {
    * por natureza; vale o bloqueio por nome (create/update/delete…).
    */
   toolPolicy?: "annotation" | "names";
+  /** Escopo OAuth pedido ao Google no modo conta de serviço. */
+  oauthScope?: string;
   summary: string;
   docs: string;
 };
@@ -202,10 +208,12 @@ export const nativePresets: NativePreset[] = [
     transport: "http",
     endpoint: "https://bigquery.googleapis.com/mcp",
     endpointPattern: "^https://bigquery\\.googleapis\\.com/mcp/?$",
-    auth: ["bearer"],
+    auth: ["serviceAccount", "bearer"],
+    defaultAuth: "serviceAccount",
+    oauthScope: "https://www.googleapis.com/auth/bigquery",
     tokenLabel: "Access token OAuth 2.0 (gcloud auth print-access-token)",
     tokenHelp:
-      "Token de curta duração (≈1 h). Use uma conta de serviço com MCP Tool User, BigQuery Job User e Data Viewer no dataset de exportação de billing.",
+      "Token de curta duração (≈1 h, sem renovação). Prefira a conta de serviço: o Tesseract renova o token sozinho.",
     summary:
       "Consultas no export de billing do GCP (FinOps) e metadados de datasets. O servidor remoto não aceita API key.",
     docs: "https://docs.cloud.google.com/bigquery/docs/use-bigquery-mcp",

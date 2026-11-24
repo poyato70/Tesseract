@@ -248,6 +248,7 @@ export function Catalog({
 }) {
   const [guide, setGuide] = useState(false);
   const [filter, setFilter] = useState("");
+  const [tab, setTab] = useState<"conectores" | "registry" | "avancado">("conectores");
   const [url, setUrl] = useState("");
   const [trust, setTrust] = useState(false);
   const [manifest, setManifest] = useState<any>();
@@ -289,6 +290,20 @@ export function Catalog({
         </section>
       )}
 
+      <div className="cat-tabs" role="tablist" aria-label="Seções do catálogo">
+        {([
+          ["conectores", "Conectores prontos"],
+          ["registry", "MCP Registry oficial"],
+          ["avancado", "Por provedor e manifesto"],
+        ] as const).map(([id, label]) => (
+          <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? "is-active" : ""} onClick={() => setTab(id)}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "conectores" && (
+      <>
       <div className="cat-filter">
         <Search size={15} aria-hidden="true" />
         <input aria-label="Filtrar conectores" placeholder="Filtrar conectores (ex.: github, custo, openshift)" value={filter} onChange={(e) => setFilter(e.target.value)} />
@@ -357,11 +372,21 @@ export function Catalog({
         );
       })}
 
+      </>
+      )}
+
+      {tab === "registry" && (
+      <>
       <h3 className="cat-title">MCP Registry oficial</h3>
       <div className="cat-panel">
         <RegistrySearch onConfigure={onConfigure} />
       </div>
 
+      </>
+      )}
+
+      {tab === "avancado" && (
+      <>
       <h3 className="cat-title">Por provedor · APIs nativas e MCPs sugeridos</h3>
       <div className="cat-panel">
         <CloudDefaults onConfigure={onConfigure} onNavigate={onNavigate} />
@@ -416,6 +441,8 @@ export function Catalog({
           </article>
         ))}
       </div>
+      </>
+      )}
     </div>
   );
 }

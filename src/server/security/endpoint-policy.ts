@@ -1,6 +1,6 @@
 import { lookup } from "node:dns/promises";
 import { BlockList, isIP } from "node:net";
-import { Agent, fetch as fetchHttp } from "undici";
+import { Agent, ProxyAgent, fetch as fetchHttp } from "undici";
 import { AppError } from "../errors.js";
 const privateIPs = new BlockList();
 for (const [a, n] of [
@@ -31,6 +31,35 @@ export function isPrivateAddress(ip: string) {
     ? privateIPs.check(ip, "ipv4")
     : privateIPs.check(ip, "ipv6");
 }
+/**
+ * Proxy corporativo para chamadas de saída (MCP HTTP, modelos, agentes).
+ * Usa HTTPS_PROXY/HTTP_PROXY e respeita NO_PROXY. Destinos loopback e de rede
+ * privada nunca passam pelo proxy. TESSERACT_PROXY=off desliga o uso.
+ */
+export function proxyFor(url: URL, env: NodeJS.ProcessEnv = process.env) {
+  if ((env.TESSERACT_PROXY || "").toLowerCase() === "off") return undefined;
+  const host = url.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  if (host === "localhost" || (isIP(host) && isPrivateAddress(host))) return undefined;
+  const proxy =
+    url.protocol === "https:"
+      ? env.HTTPS_PROXY || env.https_proxy
+      : env.HTTP_PROXY || env.http_proxy;
+  if (!proxy) return undefined;
+  const noProxy = (env.NO_PROXY || env.no_proxy || "")
+    .split(/[,\s]+/)
+    .map((x) => x.trim().toLowerCase().replace(/:\d+$/, ""))
+    .filter(Boolean);
+  for (const entry of noProxy) {
+    if (entry === "*") return undefined;
+    const bare = entry.replace(/^\*?\./, "");
+    if (host === bare || host.endsWith("." + bare)) return undefined;
+  }
+  try {
+    return new URL(proxy).href;
+  } catch {
+    return undefined;
+  }
+}
 export async function validateEndpoint(
   value: string,
   allowPrivate = false,
@@ -39,6 +68,7 @@ export async function validateEndpoint(
     options: { all: true; verbatim: true },
   ) => Promise<{ address: string; family: number }[]> = lookup,
   allowHttp = false,
+  allowGithubApi = false,
 ) {
   let url: URL;
   try {
@@ -51,7 +81,8 @@ export async function validateEndpoint(
     url.username ||
     url.password ||
     url.hash ||
-    /github\.com$/i.test(host) ||
+    (/github\.com$/i.test(host) &&
+      !(allowGithubApi && /^api\.github\.com$/i.test(host))) ||
     !["https:", "http:"].includes(url.protocol)
   )
     throw new AppError(
@@ -67,11 +98,20 @@ export async function validateEndpoint(
       "invalid_endpoint",
       "HTTP somente é permitido em loopback explicitamente autorizado.",
     );
-  const addresses = isIP(host)
-    ? [{ address: host, family: isIP(host) }]
-    : await resolver(host, { all: true, verbatim: true });
+  const proxied = !!proxyFor(url);
+  let addresses: { address: string; family: number }[];
+  try {
+    addresses = isIP(host)
+      ? [{ address: host, family: isIP(host) }]
+      : await resolver(host, { all: true, verbatim: true });
+  } catch (e) {
+    // atrás de proxy corporativo o DNS externo costuma não resolver localmente:
+    // quem resolve é o proxy. Sem proxy, a falha de DNS continua sendo erro.
+    if (!proxied) throw e;
+    addresses = [];
+  }
   if (
-    !addresses.length ||
+    (!addresses.length && !proxied) ||
     addresses.some(
       (a) =>
         a.address.startsWith("169.254.") ||
@@ -83,28 +123,34 @@ export async function validateEndpoint(
       "invalid_endpoint",
       "O destino resolve para uma rede não autorizada.",
     );
-  return { url, addresses };
+  return { url, addresses, proxy: proxyFor(url) };
 }
 export async function fetchBound(
   endpoint: string,
   init: RequestInit = {},
   allowPrivate = false,
   allowHttp = false,
+  allowGithubApi = false,
 ) {
-  const { url, addresses } = await validateEndpoint(
+  const { url, addresses, proxy } = await validateEndpoint(
     endpoint,
     allowPrivate,
     undefined,
     allowHttp,
+    allowGithubApi,
   );
-  const agent = new Agent({
-    connect: {
-      lookup: ((_host: any, options: any, callback: any) =>
-        options.all
-          ? callback(null, addresses)
-          : callback(null, addresses[0].address, addresses[0].family)) as any,
-    },
-  });
+  // Com proxy, o túnel CONNECT leva o nome validado; sem proxy, a conexão
+  // fica presa aos endereços já verificados (anti-SSRF / DNS rebinding).
+  const agent: Agent | ProxyAgent = proxy
+    ? new ProxyAgent({ uri: proxy, proxyTunnel: true })
+    : new Agent({
+        connect: {
+          lookup: ((_host: any, options: any, callback: any) =>
+            options.all
+              ? callback(null, addresses)
+              : callback(null, addresses[0].address, addresses[0].family)) as any,
+        },
+      });
   try {
     const response = await fetchHttp(url, {
       ...init,

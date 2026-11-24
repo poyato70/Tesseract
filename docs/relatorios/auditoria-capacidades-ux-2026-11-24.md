@@ -69,3 +69,22 @@ Pontos fortes confirmados: estados reais (nada inventado), passo a passo de cinc
 9. C6 cofre multiplataforma; C8 GreenOps; C9 alertas; C10 histórico; U7–U11.
 
 Cada item deve vir com teste unitário e, quando visual, captura antes/depois em `docs/relatorios/evidencias/`.
+
+## 5. Situação após a correção (24/11/2026, tarde)
+
+| Item | Situação |
+|---|---|
+| C1 proxy para MCP HTTP | **Feito** — `proxyFor` + `ProxyAgent` (túnel CONNECT), `NO_PROXY`, loopback/privado direto, DNS local opcional atrás do proxy; teste com proxy real em `tests/security/proxy.test.ts`. |
+| C2 CI | **Feito no push** — `publish-github.ps1` copia `ci.yml` da missão 21 quando ausente. |
+| C3 e2e | **Feito** — `npm run test:e2e:m22`, 5 jornadas aprovadas. |
+| C4 motivo de bloqueio | **Feito** — `reviewReason` exibido na aba Testar. |
+| C5 conta de serviço GCP | **Feito** — JWT bearer (RFC 7523), token em cache e renovado. |
+| C7 licenças Copilot | **Feito** — FinOps → Licenças Copilot. |
+| U1, U2 | **Feito** — polling e erros de validação fora de Atividade, eventos recentes e sino. |
+| U3 | **Feito** — "Azure · desconectado/credencial" com explicação. |
+| U4 | **Feito** — abas no catálogo. |
+| U5 | **Feito** — botões e cartões legados no tema v2. |
+| U6, U8 | **Feito** — formulário em 2 colunas para conectores nativos; botão "Inserir modelo". |
+| U7 | **Feito** — lista vertical abaixo de 760 px. |
+| U10, U11 | **Feito** — últimos argumentos por tool (memória da aba); zoom com 40 px em toque. |
+| C6, C8, C9, C10, U9 | Pendentes (P2). |

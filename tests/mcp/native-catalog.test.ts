@@ -4,7 +4,7 @@ import { mcpInput } from "../../src/shared/connections.js";
 import { McpRegistry } from "../../src/server/mcp/registry.js";
 import { Invalidation } from "../../src/server/connections/invalidation.js";
 import { capability } from "../../src/server/mcp/presets.js";
-import { reviewable } from "../../src/server/mcp/tool-policy.js";
+import { reviewable, reviewReason } from "../../src/server/mcp/tool-policy.js";
 import { findOnPath } from "../../src/server/mcp/runner.js";
 import { githubModelsPath, isGithubModels } from "../../src/server/agents/model-provider.js";
 import { copilotConfig } from "../../src/web/integrations/CopilotExport.js";
@@ -84,6 +84,13 @@ describe("catálogo nativo", () => {
     expect(reviewable({ preset: "github" } as any, { ...tool, name: "get_file_contents" })).toBe(false);
     expect(reviewable({ preset: "github" } as any, { ...tool, name: "get_file_contents", annotations: { readOnlyHint: true } })).toBe(true);
     expect(reviewable({ preset: "github" } as any, { ...tool, name: "create_issue", annotations: { readOnlyHint: true } })).toBe(false);
+  });
+
+  it("explica por que uma tool não pode ser aprovada", () => {
+    const t: any = { name: "get_file_contents", inputSchema: {}, schemaHash: "h" };
+    expect(reviewReason({ preset: "github" } as any, t)).toMatch(/readOnlyHint/);
+    expect(reviewReason({ preset: "github" } as any, { ...t, annotations: { readOnlyHint: true } })).toBeUndefined();
+    expect(reviewReason({ preset: "github" } as any, { ...t, name: "delete_file", annotations: { readOnlyHint: true } })).toMatch(/escrita/);
   });
 
   it("explica executor ausente sem procurar fora do PATH informado", async () => {

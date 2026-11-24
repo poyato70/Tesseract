@@ -24,6 +24,7 @@ export const pages: Record<string, { path: string; title: string; section: strin
   budgets: { path: "/finops/budgets", title: "Budgets", section: "FinOps" },
   benefits: { path: "/finops/compromissos", title: "Compromissos", section: "FinOps" },
   multicloud: { path: "/finops/multicloud", title: "Visão multicloud", section: "FinOps" },
+  "copilot-seats": { path: "/finops/licencas-copilot", title: "Licenças Copilot", section: "FinOps" },
   hubs: { path: "/finops/hub", title: "FinOps Hub", section: "FinOps" },
   "finops-correlation": { path: "/finops/correlacao", title: "Correlação MCP", section: "FinOps" },
   "api-lab": { path: "/finops/apis", title: "Laboratório de APIs", section: "FinOps" },

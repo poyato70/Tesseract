@@ -1,3 +1,5 @@
+import { CopilotSeats } from "./pages/CopilotSeats.js";
+import { isOperationalFailure } from "./flow/operational.js";
 import { TesseractLoader } from "./flow/TesseractLoader.js";
 /**
  * Tesseract — shell reconstruído (missão 22).
@@ -419,7 +421,7 @@ export function App() {
   ];
   const showAzureGate = azurePages.includes(page);
   const recentFailures = diagnosticEvents.filter(
-    (e) => Date.now() - Date.parse(e.time) < 15 * 60_000 && (/^[45]/.test(e.status) || /failed|falh/i.test(e.status)),
+    (e) => Date.now() - Date.parse(e.time) < 15 * 60_000 && isOperationalFailure(e),
   ).length;
 
   return (
@@ -446,7 +448,7 @@ export function App() {
           onNavigate={(id) => navigate(id)}
           onOpenIntegration={(id) => openIntegration(id)}
           alerts={recentFailures}
-          session={{ label: boot?.authenticated ? activeAccess?.name || "Conectado" : "Desconectado", online: !!boot?.authenticated }}
+          session={{ label: boot?.authenticated ? `Azure · ${activeAccess?.name || "conectado"}` : "Azure · desconectado", online: !!boot?.authenticated }}
         />
 
         <div className="lx-content">
@@ -686,6 +688,8 @@ export function App() {
               <Accesses profiles={accesses} loginPending={loginPending} onChanged={() => void reloadSettings()} connectionFeedback={connectionFeedback} onConnect={(id, mode) => void connect(id, mode, true)} />
             </section>
           )}
+
+          {page === "copilot-seats" && <CopilotSeats profiles={mcpProfiles as any} onOpenCatalog={() => navigate("catalog")} />}
 
           {page === "multicloud" && (
             <section className="lx-panel">

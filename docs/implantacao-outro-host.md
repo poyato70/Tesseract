@@ -43,7 +43,7 @@ Não copie `node_modules`, `dist`, `.next` ou `out` de outro computador: `instal
 - O Tesseract não altera proxy, TLS nem registry. Configure-os antes no ambiente do usuário.
 - Processos MCP locais (azmcp, uvx, docker, npx) recebem do Tesseract somente estas variáveis do ambiente: `PATH`, `PATHEXT`, `HOME`/`USERPROFILE`, `APPDATA`, `LOCALAPPDATA`, `TEMP`/`TMP`, `SystemRoot`/`WINDIR`, `ProgramFiles`, `HTTP(S)_PROXY`, `NO_PROXY` (maiúsculas e minúsculas), `SSL_CERT_FILE`, `NODE_EXTRA_CA_CERTS`, `REQUESTS_CA_BUNDLE`, `UV_NATIVE_TLS`, `UV_INDEX_URL`, `UV_DEFAULT_INDEX`, `PIP_INDEX_URL`, `PIP_CERT`, `npm_config_registry`, `DOCKER_HOST`, além das credenciais do próprio conector.
 - Com CA corporativa, defina `NODE_EXTRA_CA_CERTS` (Node/npx) e `UV_NATIVE_TLS=1` ou `SSL_CERT_FILE` (uv) **antes** de `start.ps1`.
-- Conexões MCP HTTP saem pelo transporte do Tesseract com DNS fixado (proteção SSRF) e não usam o proxy. Em rede que exige proxy para a internet, os conectores remotos (GitHub, Learn, AWS Knowledge, BigQuery, ARM MCP, Fabric) precisam de liberação direta ou de um servidor interno.
+- Conexões MCP HTTP, modelos e agentes usam `HTTPS_PROXY`/`HTTP_PROXY` por túnel CONNECT, respeitando `NO_PROXY`. Endereços loopback e de rede privada vão sempre direto. Atrás do proxy, a falha de DNS local é aceita (o proxy resolve), mas um nome que resolva para rede privada continua bloqueado. `TESSERACT_PROXY=off` desativa o proxy para essas chamadas.
 
 ## 4. Recriar credenciais e integrações
 
@@ -59,12 +59,13 @@ Os segredos ficam em `%LOCALAPPDATA%\AzureCostLocal\config\vault`, protegidos po
 | GitHub (remoto) | PAT fine-grained ou token de GitHub App; para GHE.com troque a URL por `https://copilot-api.SUBDOMINIO.ghe.com/mcp` |
 | GitHub Enterprise Server | `GITHUB_PERSONAL_ACCESS_TOKEN` e `GITHUB_HOST` (Docker obrigatório) |
 | AWS Billing / Pricing | `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` (+ `AWS_SESSION_TOKEN`) ou `AWS_PROFILE`, e `AWS_REGION` |
-| Google Cloud BigQuery | Access token OAuth (`gcloud auth print-access-token`, validade ~1 h) |
+| Google Cloud BigQuery | JSON da conta de serviço (o Tesseract renova o token) ou, alternativa, access token OAuth de ~1 h |
 | OpenShift / Kubernetes (local) | `KUBECONFIG` com contexto de leitura |
 | Microsoft Learn, AWS Knowledge | Nada |
 | Hive, Db2, Teams, SMTP, LDAP | URL e token do servidor MCP interno da equipe |
 
-3. Na integração: **Testar → Conectar e listar tools → aprovar leituras → Executar**.
+3. Na integração: **Testar → Conectar e listar tools → aprovar leituras → Executar**. Tools bloqueadas mostram o motivo (por exemplo, servidor sem `readOnlyHint`).
+5. **FinOps → Licenças Copilot**: com uma integração GitHub cujo token seja de owner da organização (`manage_billing:copilot` ou `read:org`), mostra assentos cobrados, ativos e ociosos; o custo usa o preço por assento que você informar.
 4. **Agentes**: "GitHub Models (token corporativo)" usa `https://models.github.ai/orgs/SUA-ORG/inference`, modelo (ex.: `openai/gpt-4.1`) e um token com `models:read`. "Copilot local" usa o login do usuário no Copilot CLI.
 
 ## 5. Validar
@@ -74,7 +75,7 @@ Invoke-RestMethod http://127.0.0.1:4317/api/health
 npm test
 ```
 
-Os testes unitários usam dados sintéticos. Os specs Playwright (`npm run test:e2e`) ainda apontam para a interface anterior à missão 22 e precisam ser reescritos; não os use como aceite. O aceite real é: uma credencial ativa, uma tool aprovada executada com sucesso por integração e um custo comparado com o portal no mesmo período e escopo.
+Os testes unitários usam dados sintéticos. As jornadas da interface atual estão em `npm run test:e2e:m22` (Edge no Windows): catálogo, formulário nativo, criar → conectar → aprovar → executar, centro operacional e tela estreita. Os demais specs Playwright ainda cobrem telas anteriores. O aceite real é: uma credencial ativa, uma tool aprovada executada com sucesso por integração e um custo comparado com o portal no mesmo período e escopo.
 
 ## 6. O que não vai para o repositório
 

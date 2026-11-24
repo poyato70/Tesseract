@@ -94,3 +94,11 @@ Mantidos sem alteração: todo o servidor (`src/server`), contratos (`src/shared
 ### Documentação de implantação
 - Erros encontrados e corrigidos: URL do repositório (`azure-cost-local` → `Tesseract`), Node "24 obrigatório" (o `engines` aceita 22.21+ e 24.6+), dependência de CDN Three.js (não existe mais), menção a "MCPs" (agora Integrações), e2e apresentado como aceite (os specs ainda são da interface antiga), ausência de pré-requisitos por conector (uv, Docker) e de variáveis de proxy.
 - Novo guia: `docs/implantacao-outro-host.md`.
+
+## Iteração 4 — correções da auditoria (P0 e P1)
+
+Itens e situação em `auditoria-capacidades-ux-2026-11-24.md` (seção 5). Evidência observada nesta execução:
+- Vitest: 75 arquivos (71 aprovados, 4 ignorados), 237 testes aprovados; inclui proxy com túnel CONNECT real (`tests/security/proxy.test.ts`), JWT de conta de serviço verificado com chave RSA gerada no teste e resumo de licenças Copilot.
+- Playwright `npm run test:e2e:m22`: 5 de 5 jornadas aprovadas no Chromium contra a pré-visualização Linux (servidor MCP de teste). Execução no Windows/Edge ainda não observada.
+- Não validado: proxy corporativo real, BigQuery com conta de serviço real, API de licenças Copilot com organização real.
+- Publicação: push direto para `poyato70/Tesseract` a partir de clone autenticado da sessão. Capturas desta iteração ficaram fora do Git, conforme AGENTS.md.

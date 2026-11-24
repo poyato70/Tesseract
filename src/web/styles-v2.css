@@ -2072,3 +2072,210 @@ body {
     position: static;
   }
 }
+.if-grid.if-grid--two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@media (max-width: 900px) {
+  .if-grid.if-grid--two {
+    grid-template-columns: 1fr;
+  }
+}
+.cat-tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: #15171c;
+  box-shadow: var(--nm-in);
+  width: fit-content;
+}
+.cat-tabs button {
+  all: unset;
+  cursor: pointer;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--lx-muted);
+}
+.cat-tabs button.is-active {
+  color: #04262b;
+  background: linear-gradient(180deg, #35dff0, #16b8cc);
+}
+.cat-tabs button:focus-visible {
+  outline: 2px solid var(--lx-cyan);
+}
+
+/* ---------- telas legadas no tema v2 (Registry, por provedor, Agentes, Chat) ---------- */
+.lx-content :is(.actions, .config-card, .settings-form, .registry-search, .notice, .provider-choice, .azure-ai-usage) button:not([class*="lx-"]),
+.lx-content button.primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: linear-gradient(145deg, #23272e, #1b1e24);
+  box-shadow: var(--nm-out-sm);
+  color: var(--lx-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.lx-content :is(.actions, .config-card, .settings-form, .registry-search, .notice, .provider-choice, .azure-ai-usage) button:not([class*="lx-"]):hover:not(:disabled) {
+  border-color: rgba(34, 208, 226, 0.35);
+}
+.lx-content button.primary {
+  background: linear-gradient(180deg, #35dff0, #16b8cc);
+  border-color: transparent;
+  color: #04262b;
+  box-shadow: 0 8px 20px -8px rgba(34, 208, 226, 0.7), var(--nm-out-sm);
+}
+.lx-content button.primary:disabled,
+.lx-content :is(.actions, .config-card, .settings-form) button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.lx-content .config-card,
+.lx-content .settings-form {
+  border-radius: 18px;
+  background: linear-gradient(145deg, #1e2128, #191c21);
+  border: 1px solid rgba(255, 255, 255, 0.045);
+}
+
+/* ---------- centro operacional em telas estreitas ---------- */
+.op-stack {
+  display: grid;
+  gap: 8px;
+}
+.op-lane {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas: "path path" "main main" "target target";
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #1e2128, #191c21);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: var(--nm-out-sm);
+}
+.op-lane.is-online {
+  border-color: rgba(45, 224, 160, 0.3);
+}
+.op-lane.is-active {
+  border-color: var(--lx-orange);
+}
+.op-lane.is-error {
+  border-color: rgba(255, 83, 112, 0.6);
+}
+.op-lane:focus-visible {
+  outline: 2px solid var(--lx-cyan);
+}
+.op-lane-path {
+  grid-area: path;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--lx-muted);
+}
+.op-lane-main {
+  grid-area: main;
+  display: grid;
+}
+.op-lane-main strong {
+  font-size: 14.5px;
+}
+.op-lane small {
+  font-size: 12px;
+  color: var(--lx-muted);
+}
+.op-lane-target {
+  grid-area: target;
+  color: #c9a8ff;
+}
+@media (pointer: coarse) {
+  .fc-tools button {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+/* ---------- licenças Copilot ---------- */
+.cps {
+  display: grid;
+  gap: 12px;
+}
+.cps-form {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+  gap: 12px;
+  align-items: end;
+  padding: 14px 16px;
+}
+.cps-form label {
+  display: grid;
+  gap: 4px;
+  font-size: 12.5px;
+  color: var(--lx-muted);
+}
+.cps-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+.cps-ring {
+  justify-items: center;
+  text-align: center;
+}
+.cps-ring header {
+  justify-self: stretch;
+  text-align: left;
+}
+.cps-facts {
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+.cps-facts div {
+  display: flex;
+  justify-content: space-between;
+}
+.cps-facts dt {
+  color: var(--lx-muted);
+}
+.cps-facts dd {
+  margin: 0;
+  font-weight: 700;
+}
+.cps-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+.cps-list li {
+  display: grid;
+}
+.cps-list small {
+  color: var(--lx-muted);
+  font-size: 12px;
+}
+.cps-money b {
+  color: var(--lx-cyan);
+}
+.cps-empty {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+}
+@media (max-width: 1100px) {
+  .cps-form {
+    grid-template-columns: 1fr 1fr;
+  }
+}

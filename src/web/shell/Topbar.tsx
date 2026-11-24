@@ -145,7 +145,7 @@ export function Topbar({
           <Bell size={17} aria-hidden="true" />
           {alerts > 0 && <b>{alerts}</b>}
         </button>
-        <button type="button" className={`tb-session${session.online ? " is-online" : ""}`} onClick={() => onNavigate("accesses")} title="Credenciais">
+        <button type="button" className={`tb-session${session.online ? " is-online" : ""}`} onClick={() => onNavigate("accesses")} title="Credencial Microsoft Entra ativa nesta sessão. Necessária para custos Azure e integrações Microsoft; GitHub, AWS e servidores com token próprio não dependem dela.">
           <i aria-hidden="true" />
           <span>{session.label}</span>
         </button>

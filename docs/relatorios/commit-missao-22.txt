@@ -1,6 +1,11 @@
-docs: auditoria de capacidades e UX do Tesseract (24/11/2026)
+Tesseract: correções da auditoria (P0 e P1)
 
-Achados por severidade (Nielsen, WCAG 2.2) e plano de correção P0-P2.
+- Proxy corporativo para MCP HTTP, modelos e agentes (CONNECT, NO_PROXY, anti-SSRF mantido).
+- Motivo visível para tools não aprováveis; conta de serviço Google com renovação de token.
+- FinOps > Licenças Copilot (assentos cobrados, ativos, ociosos).
+- Atividade e alertas sem polling nem erros de validação; "Azure · desconectado".
+- Catálogo em abas, formulário nativo em 2 colunas, lista vertical no celular, legado no tema v2.
+- E2E das jornadas da missão 22 (npm run test:e2e:m22) e CI copiada da missão 21.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01A75SGPwDB9WW4cpceZGSuA

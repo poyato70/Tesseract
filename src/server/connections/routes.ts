@@ -17,6 +17,7 @@ import { ModelProvider } from "../agents/model-provider.js";
 import { HttpAgentClient } from "../agents/http-agent.js";
 import type { SecretStore } from "../storage/secret-store.js";
 import { AppError } from "../errors.js";
+import { copilotSeats, githubApiBase } from "../finops/copilot-seats.js";
 export function registerConnectionRoutes(
   app: FastifyInstance,
   d: {
@@ -283,6 +284,26 @@ export function registerConnectionRoutes(
       message:
         "Servidor respondeu ao protocolo MCP e listou tools. Essa etapa não comprova acesso aos dados do provedor. Salve as tools permitidas, preencha os parâmetros de uma tool e execute para testar essa operação.",
     }));
+  app.post("/api/finops/copilot-seats", async (r) => {
+    d.session(r);
+    const input = z
+      .object({ mcpConnectionId: id, org: z.string().min(1).max(39), idleDays: z.number().int().min(7).max(90).default(30) })
+      .strict()
+      .parse(r.body);
+    const p = await d.mcps.get(input.mcpConnectionId);
+    if (!["github", "github-local"].includes(p.preset) || !p.tokenRef)
+      throw new AppError("invalid_request", "Selecione uma integração GitHub com token cadastrado.");
+    let token = await d.vault.read(p.tokenRef);
+    let base = githubApiBase(p.endpoint);
+    if (p.preset === "github-local") {
+      const m = /^GITHUB_PERSONAL_ACCESS_TOKEN=(.+)$/m.exec(token);
+      const h = /^GITHUB_HOST=(https:\/\/[^\s/]+)\/?$/m.exec(token);
+      if (!m || !h) throw new AppError("invalid_request", "A integração GHES precisa de GITHUB_PERSONAL_ACCESS_TOKEN e GITHUB_HOST (https://…).");
+      token = m[1].trim();
+      base = h[1] + "/api/v3";
+    }
+    return copilotSeats(token, input.org, base, input.idleDays, (d.mcpContext || d.context)(r).signal, p.preset === "github-local");
+  });
   app.post("/api/mcp-connections/:id/disconnect", async (r) => {
     await d.mcps.disconnect(getId(r));
     return { ok: true };
