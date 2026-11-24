@@ -1,0 +1,859 @@
+import { validArmScope } from "./arm-policy.js";
+import { readCatalog } from "./catalog.js";
+import { sanitizeEvidence } from "../multicloud/sanitize.js";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { AjvJsonSchemaValidator } from "@modelcontextprotocol/sdk/validation/ajv";
+import { dirname, join } from "node:path";
+import { tmpdir } from "node:os";
+import { mkdir } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import {
+  mcpInput,
+  type McpProfile,
+  type ToolDescriptor,
+} from "../../shared/connections.js";
+import type { RequestContext } from "../../shared/contracts.js";
+import { advisorListArguments, advisorListTool } from "../../shared/advisor-quick-start.js";
+import type { ConfigStore } from "../storage/config-store.js";
+import type { SecretStore } from "../storage/secret-store.js";
+import type { AccessService } from "../connections/access-service.js";
+import type { Invalidation } from "../connections/invalidation.js";
+import type { IdentityProvider } from "../auth/identity-provider.js";
+import { AppError, assertActive } from "../errors.js";
+import { fetchBound, validateEndpoint } from "../security/endpoint-policy.js";
+import {
+  presets,
+  capability,
+  httpAudience,
+  independentMcp,
+} from "./presets.js";
+import { nativePreset, parseEnvSecret, azureNamespaces } from "../../shared/mcp-catalog.js";
+import { resolveRunner } from "./runner.js";
+import {
+  descriptor,
+  authorizeTool,
+  reviewable,
+  safeToolResult,
+} from "./tool-policy.js";
+const BASE_ENV = [
+  "PATH",
+  "Path",
+  "PATHEXT",
+  "SystemRoot",
+  "WINDIR",
+  "USERPROFILE",
+  "HOME",
+  "LOCALAPPDATA",
+  "APPDATA",
+  "TEMP",
+  "TMP",
+  "ProgramFiles",
+  // rede corporativa: proxy, certificados e repositórios internos de pacotes
+  "HTTPS_PROXY",
+  "https_proxy",
+  "HTTP_PROXY",
+  "http_proxy",
+  "NO_PROXY",
+  "no_proxy",
+  "SSL_CERT_FILE",
+  "NODE_EXTRA_CA_CERTS",
+  "REQUESTS_CA_BUNDLE",
+  "UV_NATIVE_TLS",
+  "UV_INDEX_URL",
+  "UV_DEFAULT_INDEX",
+  "PIP_INDEX_URL",
+  "PIP_CERT",
+  "npm_config_registry",
+  "NPM_CONFIG_REGISTRY",
+  "DOCKER_HOST",
+];
+type Live = {
+  client: Client;
+  profile: McpProfile;
+  tools: ToolDescriptor[];
+  controller: AbortController;
+  unwatch: () => void;
+  sessionId: string;
+};
+export class McpRegistry {
+  private live = new Map<string, Live>();
+  private states = new Map<string, unknown>();
+  constructor(
+    private store: ConfigStore,
+    private vault: SecretStore,
+    private accesses: AccessService,
+    private gate: Invalidation,
+    private identity: IdentityProvider,
+  ) {}
+  async list(sessionId: string) {
+    return (await this.store.read()).mcpProfiles.map((p) => {
+      const live = this.live.get(sessionId + "|" + p.id);
+      return {
+        ...this.publicProfile(p),
+        capability: capability(p),
+        status: this.states.get(p.id) || "cadastrado",
+        connected: !!live && !live.controller.signal.aborted,
+      };
+    });
+  }
+  private async publicEvidence<T>(p: McpProfile, value: T): Promise<T> {
+    const secrets = p.tokenRef ? [await this.vault.read(p.tokenRef)] : [];
+    // Preserve schema property names and types; only sanitize string values.
+    const visit = (v: any): any =>
+      typeof v === "string"
+        ? sanitizeEvidence(v, secrets)
+        : Array.isArray(v)
+          ? v.map(visit)
+          : v && typeof v === "object"
+            ? Object.fromEntries(
+                Object.entries(v).map(([k, val]) => [k, visit(val)]),
+              )
+            : v;
+    return visit(value);
+  }
+  publicProfile(p: McpProfile) {
+    const { tokenRef, ...publicFields } = p;
+    return { ...publicFields, tokenConfigured: !!tokenRef };
+  }
+  async get(id: string) {
+    const p = (await this.store.read()).mcpProfiles.find((x) => x.id === id);
+    if (!p)
+      throw new AppError("invalid_request", "Conexão MCP não encontrada.", 404);
+    return p;
+  }
+  async prepareAdvisor(accessId: string, subscription: string) {
+    return this.save({
+      name: "Azure Advisor",
+      preset: "azure",
+      transport: "stdio",
+      authMode: "application",
+      accessId,
+      resourceContext: { namespace: "advisor", subscription },
+    }, true);
+  }
+  async save(raw: unknown, reuseAdvisor = false) {
+    const v = mcpInput.parse(raw);
+    const native = nativePreset(v.preset);
+    if (native?.independent) {
+      if (
+        v.transport !== native.transport ||
+        !(native.auth as string[]).includes(v.authMode)
+      )
+        throw new AppError(
+          "invalid_request",
+          `${native.label} usa ${native.transport === "http" ? "HTTPS" : "execução local (STDIO)"} com autenticação ${native.auth.join(" ou ")}.`,
+        );
+      if (
+        native.transport === "http" &&
+        native.endpointPattern &&
+        !new RegExp(native.endpointPattern, "i").test(v.endpoint || "")
+      )
+        throw new AppError(
+          "invalid_endpoint",
+          `Endpoint fora do padrão oficial de ${native.label}. ${native.endpointHint || native.endpoint || ""}`.trim(),
+        );
+    }
+    if (!independentMcp(v) && ["bearer", "env"].includes(v.authMode))
+      throw new AppError(
+        "invalid_request",
+        "Use a identidade Microsoft deste preset.",
+      );
+    if (v.preset === "arm" && !validArmScope(v.resourceContext.scope || ""))
+      throw new AppError(
+        "invalid_request",
+        "ARM MCP requer scope da subscription/RG em Recursos autorizados.",
+      );
+    if (v.transport === "http") {
+      if (!v.endpoint)
+        throw new AppError(
+          "invalid_endpoint",
+          "Informe a URL da instância MCP.",
+        );
+      if (!independentMcp(v)) httpAudience(v as any);
+      await validateEndpoint(v.endpoint, v.allowPrivateNetwork);
+    }
+    if (
+      v.preset === "adx" &&
+      (!v.resourceContext.clusterUri || !v.resourceContext.database)
+    )
+      throw new AppError(
+        "invalid_request",
+        "ADX requer clusterUri e database.",
+      );
+    if (v.preset === "powerbi" && !v.resourceContext.modelId)
+      throw new AppError("invalid_request", "Power BI requer modelId.");
+    let saved!: McpProfile;
+    let reused = false;
+    let newRef: string | undefined, oldRef: string | undefined;
+    try {
+      await this.store.mutate(async (s) => {
+        if (reuseAdvisor) {
+          if (!s.accessProfiles.some((a) => a.id === v.accessId && a.secretRef))
+            throw new AppError("auth_configuration", "Selecione um acesso de aplicação com Secret cadastrado.");
+          const match = s.mcpProfiles.find((p) =>
+            p.preset === "azure" && p.transport === "stdio" &&
+            p.authMode === "application" && p.accessId === v.accessId &&
+            p.resourceContext.namespace === "advisor" &&
+            p.resourceContext.subscription === v.resourceContext.subscription &&
+            Object.keys(p.resourceContext).length === 2,
+          );
+          if (match) {
+            saved = match;
+            reused = true;
+            return;
+          }
+        }
+        if (v.accessId && !s.accessProfiles.some((a) => a.id === v.accessId))
+          throw new AppError("invalid_request", "Acesso salvo não encontrado.");
+        const old = s.mcpProfiles.find((x) => x.id === v.id);
+        if (v.id && !old)
+          throw new AppError("invalid_request", "Conexão não encontrada.", 404);
+        if (old && v.expectedVersion !== old.configurationVersion)
+          throw new AppError(
+            "configuration_changed",
+            "Conexão alterada. Recarregue.",
+            409,
+          );
+        oldRef = old?.tokenRef;
+        if (
+          oldRef &&
+          ["bearer", "env"].includes(v.authMode) &&
+          v.tokenAction?.kind !== "replace" &&
+          v.tokenAction?.kind !== "remove" &&
+          (old?.endpoint !== v.endpoint || old?.preset !== v.preset)
+        )
+          throw new AppError(
+            "credential_binding",
+            "Ao mudar endpoint ou preset, substitua ou remova o token MCP.",
+            409,
+          );
+        let tokenRef = ["bearer", "env"].includes(v.authMode)
+          ? oldRef
+          : undefined;
+        if (v.tokenAction?.kind === "replace") {
+          if (!independentMcp(v) || !["bearer", "env"].includes(v.authMode))
+            throw new AppError(
+              "invalid_request",
+              "Token próprio requer autenticação Bearer ou variáveis de ambiente.",
+            );
+          if (v.authMode === "env") {
+            const keys = native?.envKeys || [];
+            if (!Object.keys(parseEnvSecret(v.tokenAction.value, keys)).length)
+              throw new AppError(
+                "invalid_request",
+                `Informe ao menos uma variável no formato CHAVE=valor. Aceitas: ${keys.join(", ")}.`,
+              );
+          }
+          tokenRef = newRef = await this.vault.put(v.tokenAction.value);
+        }
+        if (v.tokenAction?.kind === "remove") tokenRef = undefined;
+        if (v.authMode === "bearer" && !tokenRef)
+          throw new AppError(
+            "auth_configuration",
+            "Cadastre o token do endpoint MCP.",
+          );
+        if (v.authMode === "env" && !tokenRef)
+          throw new AppError(
+            "auth_configuration",
+            "Cadastre as variáveis de ambiente (credenciais) do conector.",
+          );
+        const { expectedVersion, tokenAction, ...fields } = v;
+        saved = {
+          ...fields,
+          tokenRef,
+          id: old?.id || randomUUID(),
+          configurationVersion: (old?.configurationVersion || 0) + 1,
+        };
+        s.mcpProfiles = s.mcpProfiles.filter((x) => x.id !== saved.id);
+        s.mcpProfiles.push(saved);
+      });
+    } catch (e) {
+      if (newRef) await this.vault.remove(newRef);
+      throw e;
+    }
+    if (reused) return this.publicProfile(saved);
+    this.gate.changed("mcp:" + saved.id);
+    await this.disconnect(saved.id);
+    if (oldRef && oldRef !== saved.tokenRef) await this.vault.remove(oldRef);
+    return this.publicProfile(saved);
+  }
+  async remove(id: string) {
+    const old = await this.get(id);
+    await this.store.mutate((s) => {
+      if (
+        (s.hubProfiles || []).some((h) => h.mcpConnectionId === id) ||
+        s.agentProfiles.some((a) => a.mcpConnectionIds.includes(id))
+      )
+        throw new AppError(
+          "access_in_use",
+          "Remova o vínculo com os agentes antes de excluir.",
+          409,
+        );
+      s.mcpProfiles = s.mcpProfiles.filter((p) => p.id !== id);
+    });
+    this.gate.changed("mcp:" + id);
+    await this.disconnect(id);
+    if (old.tokenRef) await this.vault.remove(old.tokenRef);
+  }
+  async disconnect(id: string) {
+    for (const [key, live] of this.live)
+      if (live.profile.id === id) {
+        this.live.delete(key);
+        live.unwatch();
+        live.controller.abort();
+        await live.client.close().catch(() => {});
+      }
+    this.states.delete(id);
+  }
+  async closeSession(sessionId: string) {
+    for (const live of [...this.live.values()])
+      if (live.sessionId === sessionId) await this.disconnect(live.profile.id);
+  }
+  async close() {
+    for (const live of [...this.live.values()])
+      await this.disconnect(live.profile.id);
+  }
+  async connect(ctx: RequestContext, id: string) {
+    assertActive(ctx.signal);
+    const p = await this.get(id),
+      cap = capability(p);
+    if (cap.status === "unsupported")
+      throw new AppError("unsupported", cap.reason);
+    const independent = independentMcp(p);
+    const a =
+      !independent && p.accessId
+        ? await this.accesses.get(p.accessId)
+        : undefined;
+    if (!independent) {
+      if (!a)
+        throw new AppError(
+          "invalid_request",
+          "Vincule um acesso salvo ao MCP.",
+        );
+      if (ctx.tenantId !== a.tenantId || ctx.accessId !== a.id)
+        throw new AppError(
+          "forbidden",
+          `Conecte a identidade Azure "${a.name}" cadastrada em Acessos antes de testar este MCP. Isso autentica o acesso ao Azure; não é uma falha do servidor MCP.`,
+          403,
+        );
+      if (p.authMode === "delegated" && ctx.principalKind !== "user")
+        throw new AppError(
+          "forbidden",
+          "Esta conexão requer login de usuário.",
+          403,
+        );
+    }
+    const key = ctx.sessionId + "|" + id,
+      old = this.live.get(key);
+    if (old && old.profile.configurationVersion === p.configurationVersion)
+      return old;
+    const versions = await this.gate.capture([
+        ...(a ? ["access:" + a.id] : []),
+        "mcp:" + id,
+      ]),
+      controller = new AbortController(),
+      unwatchConfig = this.gate.watch(versions, controller);
+    const abortParent = () => controller.abort();
+    ctx.signal.addEventListener("abort", abortParent, { once: true });
+    const unwatch = () => {
+      unwatchConfig();
+      ctx.signal.removeEventListener("abort", abortParent);
+    };
+    if (ctx.signal.aborted) controller.abort();
+    const client = new Client({ name: "azure-cost-local", version: "0.5.1" });
+    let transport;
+    try {
+      if (p.transport === "http") {
+        const preset = presets.find((x) => x.id === p.preset)!;
+        const endpoint = p.endpoint!;
+        await validateEndpoint(endpoint, p.allowPrivateNetwork);
+        const expected = new URL(endpoint).origin;
+        const audience = independent ? "" : httpAudience(p);
+        transport = new StreamableHTTPClientTransport(new URL(endpoint), {
+          fetch: async (input: any, options: any) => {
+            await this.gate.assertCurrent(versions);
+            const target =
+              typeof input === "string"
+                ? input
+                : input instanceof URL
+                  ? input.href
+                  : input.url;
+            if (new URL(target).origin !== expected)
+              throw new AppError(
+                "invalid_endpoint",
+                "O MCP tentou trocar de host.",
+              );
+            const token =
+              p.authMode === "none"
+                ? undefined
+                : p.authMode === "bearer"
+                  ? await this.vault.read(p.tokenRef!)
+                  : p.authMode === "application"
+                    ? await this.identity.applications.token(a!.id, audience)
+                    : await this.identity.getToken(ctx, audience);
+            const headers = new Headers(options?.headers);
+            if (token) headers.set("Authorization", "Bearer " + token);
+            if (p.preset === "arm")
+              headers.set("x-mcp-toolset", "CostManagement");
+            return fetchBound(
+              target,
+              {
+                ...options,
+                headers,
+                signal: AbortSignal.any([
+                  controller.signal,
+                  ctx.signal,
+                  options?.signal || new AbortController().signal,
+                ]),
+              },
+              p.allowPrivateNetwork,
+            );
+          },
+        });
+      } else if (independent) {
+        const n = nativePreset(p.preset);
+        if (!n?.runner)
+          throw new AppError("unsupported", "Sem executor local para este conector.");
+        if (!p.tokenRef)
+          throw new AppError(
+            "auth_configuration",
+            "Cadastre as variáveis de ambiente (credenciais) do conector.",
+          );
+        const cwd = join(tmpdir(), "tesseract-mcp", p.preset);
+        await mkdir(cwd, { recursive: true });
+        const env: Record<string, string> = {};
+        for (const key of BASE_ENV)
+          if (process.env[key]) env[key] = process.env[key]!;
+        Object.assign(
+          env,
+          n.runner.env || {},
+          parseEnvSecret(await this.vault.read(p.tokenRef), n.envKeys || []),
+        );
+        const run = await resolveRunner(n.runner);
+        transport = new StdioClientTransport({
+          command: run.command,
+          args: run.args,
+          env,
+          cwd,
+          stderr: "pipe",
+          maxBufferSize: 2097152,
+        });
+        (transport.stderr as any)?.resume();
+      } else {
+        if (!a?.secretRef)
+          throw new AppError(
+            "auth_configuration",
+            "Cadastre o Secret Value para o MCP local.",
+          );
+        const preset = presets.find((x) => x.id === p.preset)!;
+        if (!preset.package || !preset.bin)
+          throw new AppError(
+            "unsupported",
+            "Sem executor local para este preset.",
+          );
+        const cwd = join(tmpdir(), "azure-cost-mcp");
+        await mkdir(cwd, { recursive: true });
+        const env: Record<string, string> = {};
+        for (const key of BASE_ENV)
+          if (process.env[key]) env[key] = process.env[key]!;
+        Object.assign(env, {
+          AZURE_TENANT_ID: a.tenantId,
+          AZURE_CLIENT_ID: a.clientId,
+          AZURE_CLIENT_SECRET: await this.vault.read(a.secretRef),
+          AZURE_TOKEN_CREDENTIALS: "EnvironmentCredential",
+        });
+        const args = [
+          join(dirname(process.execPath), "node_modules/npm/bin/npm-cli.js"),
+          "exec",
+          "--yes",
+          "--package",
+          preset.package,
+          "--",
+          preset.bin,
+          "server",
+          "start",
+          "--mode",
+          "all",
+        ];
+        if (p.preset !== "fabric") args.push("--read-only");
+        if (p.preset === "adx") args.push("--namespace", "kusto");
+        if (p.preset === "azure") {
+          const namespace = p.resourceContext.namespace || "pricing";
+          if (!azureNamespaces.some((x) => x.id === namespace))
+            throw new AppError(
+              "invalid_request",
+              "Namespace Azure não permitido.",
+            );
+          args.push("--namespace", namespace);
+        }
+        transport = new StdioClientTransport({
+          command: process.execPath,
+          args,
+          env,
+          cwd,
+          stderr: "pipe",
+          maxBufferSize: 2097152,
+        });
+        (transport.stderr as any)?.resume();
+      }
+      await client.connect(transport, { timeout: 60000 });
+      const tools: ToolDescriptor[] = [];
+      let cursor: string | undefined;
+      const seen = new Set<string>();
+      if (client.getServerCapabilities()?.tools)
+        do {
+          const result = await client.listTools(
+            cursor ? { cursor } : undefined,
+            {
+              signal: controller.signal,
+              timeout: 15000,
+            },
+          );
+          tools.push(...result.tools.map(descriptor));
+          if (tools.length > 100)
+            throw new AppError(
+              "unsupported",
+              "Selecione namespaces menores: limite de 100 ferramentas por conexão.",
+            );
+          cursor = result.nextCursor;
+          if (cursor && seen.has(cursor))
+            throw new AppError("upstream", "Paginação MCP circular.", 502);
+          if (cursor) seen.add(cursor);
+        } while (cursor);
+      await this.gate.assertCurrent(versions);
+      assertActive(ctx.signal);
+      const live = {
+        client,
+        profile: p,
+        tools,
+        controller,
+        unwatch,
+        sessionId: ctx.sessionId,
+      };
+      controller.signal.addEventListener(
+        "abort",
+        () => {
+          if (this.live.get(key) === live) this.live.delete(key);
+          unwatch();
+          void client.close().catch(() => {});
+        },
+        { once: true },
+      );
+      this.live.set(key, live);
+      client.onclose = () => controller.abort();
+      ctx.diagnose?.({
+        source: "MCP",
+        operation: p.name + " / tools/list",
+        status: "conectado",
+        detail:
+          tools.length +
+          " tools descobertas: " +
+          tools.map((t) => t.name).join(", ") +
+          ". Catálogo não comprova permissão de acesso aos dados.",
+      });
+      this.states.set(id, "conectado — ferramentas descobertas");
+      return live;
+    } catch (e) {
+      unwatch();
+      controller.abort();
+      await client.close().catch(() => {});
+      const message = e instanceof Error ? e.message : "";
+      const httpStatus = message.match(
+        /\b(401|403|404|429|500|502|503)\b/,
+      )?.[1];
+      ctx.diagnose?.({
+        source: "MCP",
+        operation: p.name + " / conectar",
+        status:
+          e instanceof AppError ? e.code : httpStatus || "mcp_unavailable",
+        detail:
+          e instanceof AppError
+            ? e.message
+            : httpStatus === "401"
+              ? "Servidor MCP não aceitou a autenticação."
+              : httpStatus === "403"
+                ? "Servidor MCP negou permissão."
+                : "Falha ao iniciar ou negociar o protocolo MCP. Verifique endpoint, transporte e disponibilidade do servidor; nenhuma mensagem bruta de credencial é registrada.",
+      });
+      if (e instanceof AppError) throw e;
+      throw new AppError(
+        "mcp_unavailable",
+        "Não foi possível conectar ao MCP. Verifique endpoint, permissão e autenticação específica do serviço.",
+        502,
+      );
+    }
+  }
+  async tools(ctx: RequestContext, id: string) {
+    const live = await this.connect(ctx, id);
+    return this.publicEvidence(
+      live.profile,
+      live.tools.map((t) => ({
+        ...t,
+        reviewable: reviewable(live.profile, t),
+        approved: live.profile.approvedTools.some(
+          (x) => x.name === t.name && x.schemaHash === t.schemaHash,
+        ),
+      })),
+    );
+  }
+  async catalog(ctx: RequestContext, id: string) {
+    const live = await this.connect(ctx, id);
+    const signal = AbortSignal.any([ctx.signal, live.controller.signal]);
+    const catalog = await readCatalog(live.client, signal);
+    assertActive(signal);
+    ctx.diagnose?.({
+      source: "MCP",
+      operation: live.profile.name + " / catálogos",
+      status: [catalog.prompts.status, catalog.resources.status].some(
+        (s) => s === "error" || s === "partial",
+      )
+        ? "partial"
+        : "concluído",
+      detail: `Prompts: ${catalog.prompts.status}; resources: ${catalog.resources.status}. Descoberta não comprova acesso financeiro.`,
+    });
+    return this.publicEvidence(live.profile, {
+      ...catalog,
+      requestId: ctx.requestId,
+      tools: await this.tools(ctx, id),
+    });
+  }
+  async inspect(
+    ctx: RequestContext,
+    id: string,
+    input: {
+      kind: "prompt" | "resource";
+      name: string;
+      arguments?: Record<string, string>;
+    },
+  ) {
+    const live = await this.connect(ctx, id),
+      signal = AbortSignal.any([ctx.signal, live.controller.signal]);
+    const catalog = await readCatalog(live.client, signal);
+    let response: unknown;
+    if (input.kind === "prompt") {
+      if (!catalog.prompts.items.some((p: any) => p.name === input.name))
+        throw new AppError(
+          "forbidden",
+          "Prompt não consta do catálogo listado.",
+          403,
+        );
+      response = await live.client.getPrompt(
+        { name: input.name, arguments: input.arguments },
+        { signal, timeout: 15000 },
+      );
+    } else {
+      if (!catalog.resources.items.some((r: any) => r.uri === input.name))
+        throw new AppError(
+          "forbidden",
+          "Resource não consta do catálogo listado.",
+          403,
+        );
+      response = await live.client.readResource(
+        { uri: input.name },
+        { signal, timeout: 15000 },
+      );
+    }
+    assertActive(signal);
+    ctx.diagnose?.({
+      source: "MCP",
+      operation: live.profile.name + " / " + input.kind,
+      status: "concluído",
+      detail: "Leitura explícita; conteúdo não executado.",
+    });
+    return {
+      requestId: ctx.requestId,
+      response: safeToolResult(
+        sanitizeEvidence(await this.publicEvidence(live.profile, response)),
+      ),
+    };
+  }
+  async approve(ctx: RequestContext, id: string, names: string[], advisorSchemaHash?: string) {
+    const live = await this.connect(ctx, id);
+    if (advisorSchemaHash !== undefined) {
+      const t = live.tools.find((tool) => tool.name === names[0]);
+      if (names.length !== 1 || !t || t.schemaHash !== advisorSchemaHash ||
+        !advisorListTool.test(t.name) || !reviewable(live.profile, t) ||
+        live.profile.preset !== "azure" || live.profile.transport !== "stdio" ||
+        live.profile.authMode !== "application" || live.profile.resourceContext.namespace !== "advisor" ||
+        !advisorListArguments(t, live.profile.resourceContext.subscription || "")) {
+        throw new AppError("configuration_changed", "A ferramenta ou a conexão mudou. Liste as ferramentas novamente.", 409);
+      }
+      const { configurationVersion, tokenRef, ...fields } = live.profile;
+      return this.save({
+        ...fields,
+        expectedVersion: configurationVersion,
+        approvedTools: [
+          ...fields.approvedTools.filter((tool) => tool.name !== t.name),
+          { name: t.name, schemaHash: t.schemaHash },
+        ],
+      });
+    }
+    const tools = names.map((name) => {
+      const t = live.tools.find((t) => t.name === name);
+      if (!t || !reviewable(live.profile, t))
+        throw new AppError(
+          "forbidden",
+          "Ferramenta não elegível para aprovação.",
+          403,
+        );
+      return { name: t.name, schemaHash: t.schemaHash };
+    });
+    const { configurationVersion, tokenRef, ...fields } = live.profile;
+    return this.save({
+      ...fields,
+      expectedVersion: configurationVersion,
+      approvedTools: tools,
+    });
+  }
+  async call(
+    ctx: RequestContext,
+    id: string,
+    name: string,
+    args: Record<string, unknown>,
+    registeredQuery?: string,
+    confirmedExecution = false,
+    expectedSchemaHash?: string,
+  ) {
+    const live = await this.connect(ctx, id),
+      current = await this.get(id);
+    const latest = await live.client.listTools(undefined, {
+      signal: ctx.signal,
+      timeout: 15000,
+    });
+    const t = latest.tools.map(descriptor).find((t) => t.name === name);
+    if (!t) throw new AppError("unsupported", "Ferramenta não encontrada.");
+    if (expectedSchemaHash !== undefined && t.schemaHash !== expectedSchemaHash)
+      throw new AppError("configuration_changed", "A definição da ferramenta mudou. Liste as ferramentas novamente.", 409);
+    ctx.diagnose?.({
+      source: "MCP",
+      operation: current.name + " / " + name,
+      status: "validando",
+      detail:
+        "Verificando aprovação, schema e escopo. Argumentos e credenciais não são registrados.",
+    });
+    authorizeTool(current, t, args, registeredQuery);
+    if (
+      t._meta?.["tesseract/approval"] === "each-call" &&
+      !confirmedExecution
+    )
+      throw new AppError(
+        "forbidden",
+        "Esta ferramenta exige confirmação explícita para cada execução.",
+        403,
+      );
+    const validate = new AjvJsonSchemaValidator().getValidator(
+      t.inputSchema as any,
+    );
+    if (!validate(args).valid)
+      throw new AppError(
+        "invalid_request",
+        "Os argumentos não correspondem ao schema desta tool. Confira os campos obrigatórios e os tipos no formulário. Obrigatórios: " +
+          ((t.inputSchema as any).required || []).join(", "),
+      );
+    const versions = await this.gate.capture([
+      "mcp:" + id,
+      ...(current.accessId ? ["access:" + current.accessId] : []),
+    ]);
+    const callStarted = Date.now();
+    let result;
+    try {
+      result = await live.client.callTool(
+        { name, arguments: args },
+        undefined,
+        {
+          signal: AbortSignal.any([ctx.signal, live.controller.signal]),
+          timeout: 60000,
+        },
+      );
+    } catch {
+      throw new AppError(
+        "mcp_result_indeterminate",
+        "A chamada foi enviada, mas o MCP não confirmou o resultado. Consulte o servidor antes de repetir.",
+        502,
+      );
+    }
+    try {
+      await this.gate.assertCurrent(versions);
+      assertActive(ctx.signal);
+    } catch {
+      throw new AppError(
+        "mcp_result_indeterminate",
+        "O MCP respondeu, mas a sessão ou configuração mudou antes do registro. Consulte o servidor antes de repetir.",
+        502,
+      );
+    }
+    let commandStatus: number | undefined;
+    const payload = (result as any).structuredContent;
+    if (typeof payload?.status === "number") commandStatus = payload.status;
+    if (commandStatus === undefined)
+      for (const c of Array.isArray(result.content) ? result.content : [])
+        if (c.type === "text") {
+          try {
+            const v = JSON.parse(String(c.text));
+            if (typeof v.status === "number") commandStatus = v.status;
+          } catch {}
+        }
+    if (
+      result.isError ||
+      (commandStatus !== undefined && commandStatus >= 400)
+    ) {
+      ctx.diagnose?.({
+        source: "MCP",
+        operation: name,
+        status: "mcp_tool_failed",
+        detail:
+          "O MCP retornou erro de execução" +
+          (commandStatus !== undefined
+            ? " (status " + commandStatus + ")"
+            : "") +
+          "; a consulta não foi validada.",
+      });
+      this.states.set(id, "falha na consulta");
+      throw new AppError(
+        "mcp_tool_failed",
+        commandStatus === 400
+          ? "A tool MCP recusou os parâmetros (status 400). Confira os campos, SKU e filtros; esta resposta não comprova falha no login."
+          : commandStatus === 401
+            ? "A tool MCP não aceitou a autenticação (status 401). Reconecte o acesso vinculado."
+            : commandStatus === 403
+              ? "A tool MCP negou acesso aos dados (status 403). Confira as permissões da identidade ativa."
+              : "A tool MCP informou falha na consulta" +
+                (commandStatus !== undefined
+                  ? " (status " + commandStatus + ")"
+                  : "") +
+                ". Veja a operação no Diagnóstico.",
+        502,
+      );
+    }
+    ctx.diagnose?.({
+      source: "MCP",
+      operation: current.name + " / " + name,
+      status: "sucesso",
+      detail:
+        "tools/call retornou sem isError; resposta disponível no painel da execução. Isso valida esta chamada, não todas as capacidades Azure.",
+    });
+    this.states.set(id, "consulta validada");
+    return {
+      requestId: ctx.requestId,
+      durationMs: Date.now() - callStarted,
+      source: "mcp",
+      connectionId: id,
+      operation: name,
+      result: safeToolResult(
+        sanitizeEvidence(
+          result,
+          current.tokenRef ? [await this.vault.read(current.tokenRef)] : [],
+        ),
+      ),
+      ...(current.preset === "arm"
+        ? {
+            warnings: [
+              "Retorno ARM MCP bruto e potencialmente limitado; não representa automaticamente o total completo. Verifique limites e truncamento antes de somar linhas.",
+            ],
+          }
+        : {}),
+    };
+  }
+}

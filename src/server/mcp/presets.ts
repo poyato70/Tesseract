@@ -1,0 +1,179 @@
+import { ARM_MCP_AUDIENCE } from "../auth/resource-scopes.js";
+import { AppError } from "../errors.js";
+import type { McpProfile, CapabilityRecord } from "../../shared/connections.js";
+import { isIndependentPreset, nativePreset, nativePresets } from "../../shared/mcp-catalog.js";
+export const independentMcp = (p: { preset: string }) =>
+  isIndependentPreset(p.preset);
+export const presets: {
+  id: string;
+  name: string;
+  endpoint: string;
+  namespace: string;
+  audience: string;
+  package?: string;
+  bin?: string;
+}[] = [
+  ...nativePresets.map((n) => ({
+    id: n.id,
+    name: n.label,
+    endpoint: n.endpoint || "",
+    namespace: "",
+    audience: "",
+  })),
+  {
+    id: "arm",
+    name: "Azure Resource Manager — Cost Management (preview)",
+    endpoint: "https://mcp.management.azure.com",
+    namespace: "",
+    audience: ARM_MCP_AUDIENCE,
+  },
+  {
+    id: "azure",
+    name: "Microsoft Azure",
+    endpoint: "",
+    namespace: "",
+    package: "@azure/mcp@3.0.0",
+    bin: "azmcp",
+    audience: "https://management.azure.com",
+  },
+  {
+    id: "adx",
+    name: "Azure Data Explorer",
+    endpoint: "",
+    namespace: "kusto",
+    package: "@azure/mcp@3.0.0",
+    bin: "azmcp",
+    audience: "https://management.azure.com",
+  },
+  {
+    id: "foundry",
+    name: "Microsoft Foundry",
+    endpoint: "https://mcp.ai.azure.com",
+    namespace: "",
+    audience: "https://mcp.ai.azure.com",
+  },
+  {
+    id: "fabric",
+    name: "Microsoft Fabric",
+    endpoint: "https://api.fabric.microsoft.com/v1/mcp/core",
+    namespace: "",
+    package: "@microsoft/fabric-mcp@1.7.0",
+    bin: "fabmcp",
+    audience: "https://api.fabric.microsoft.com",
+  },
+  {
+    id: "powerbi",
+    name: "Power BI",
+    endpoint: "https://api.fabric.microsoft.com/v1/mcp/powerbi",
+    namespace: "",
+    audience: "https://api.fabric.microsoft.com",
+  },
+];
+export function capability(
+  p: Pick<McpProfile, "preset" | "transport" | "authMode">,
+): CapabilityRecord {
+  if (independentMcp(p)) {
+    const n = nativePreset(p.preset)!;
+    const ok =
+      p.transport === n.transport &&
+      (n.auth as string[]).includes(p.authMode);
+    return {
+      service: p.preset,
+      transport: p.transport,
+      authMode: p.authMode,
+      status: ok ? "pending" : "unsupported",
+      reason: ok
+        ? n.transport === "stdio"
+          ? `Executado localmente via ${n.runner?.command}. ${n.requires || ""} Não herda identidade Azure.`.trim()
+          : "Autenticação própria do endpoint. Não herda identidade Azure. A descoberta não comprova acesso aos recursos."
+        : `Este conector aceita ${n.transport.toUpperCase()} com autenticação ${n.auth.join(" ou ")}.`,
+      sourceUrl: n.docs,
+      checkedAt: new Date().toISOString(),
+    };
+  }
+  if (p.authMode === "bearer")
+    return {
+      service: p.preset,
+      transport: p.transport,
+      authMode: p.authMode,
+      status: "unsupported",
+      reason:
+        "Bearer próprio somente em conectores com autenticação própria (GitHub, Google Cloud, OpenShift, personalizado).",
+      sourceUrl: "https://github.com/microsoft/mcp",
+      checkedAt: new Date().toISOString(),
+    };
+  let status: CapabilityRecord["status"] = "pending",
+    reason =
+      "Requer teste de autenticação, descoberta e chamada de ferramenta no seu ambiente.";
+  if (
+    p.transport === "stdio" &&
+    (!["azure", "adx", "fabric"].includes(p.preset) ||
+      p.authMode !== "application")
+  ) {
+    status = "unsupported";
+    reason =
+      "Este preset local requer identidade de aplicação vinculada; não herda logins do Azure CLI.";
+  }
+  if (p.preset === "foundry" && p.authMode === "application") {
+    status = "unsupported";
+    reason =
+      "O Foundry MCP remoto usa fluxo delegado/OBO; Client Secret não é presumido como suporte a autenticação app-only.";
+  }
+  if (
+    p.preset === "arm" &&
+    (p.transport !== "http" || p.authMode !== "delegated")
+  ) {
+    status = "unsupported";
+    reason =
+      "ARM MCP oficial nesta prova de conceito requer HTTP e login de usuário com consentimento MCP.Access; app-only com Secret não está habilitado.";
+  }
+  if (p.authMode === "none") {
+    status = "unsupported";
+    reason = "Este preset Microsoft requer autenticação.";
+  }
+  return {
+    service: p.preset,
+    transport: p.transport,
+    authMode: p.authMode,
+    status,
+    reason,
+    sourceUrl:
+      p.preset === "arm"
+        ? "https://github.com/Azure/Azure-Resource-Manager-MCP"
+        : p.preset === "foundry"
+          ? "https://learn.microsoft.com/en-us/azure/foundry/mcp/get-started"
+          : p.preset === "powerbi"
+            ? "https://learn.microsoft.com/pt-br/power-bi/developer/mcp/remote-mcp-server-get-started"
+            : "https://github.com/microsoft/mcp",
+    checkedAt: new Date().toISOString(),
+  };
+}
+
+export function httpAudience(
+  p: Pick<McpProfile, "preset" | "endpoint" | "audience">,
+) {
+  const preset = presets.find((x) => x.id === p.preset)!;
+  if (["azure", "adx"].includes(p.preset)) {
+    if (
+      !/^api:\/\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        p.audience || "",
+      )
+    )
+      throw new AppError(
+        "forbidden",
+        "MCP HTTP próprio requer audience api://ID do aplicativo do servidor; tokens ARM não são enviados a hosts personalizados.",
+        403,
+      );
+    return p.audience!;
+  }
+  if (
+    new URL(p.endpoint!).href !== new URL(preset.endpoint).href ||
+    (p.audience && p.audience !== preset.audience)
+  )
+    throw new AppError(
+      "forbidden",
+      "Este preset requer seu endpoint oficial e audience correspondente.",
+      403,
+    );
+  return preset.audience;
+}

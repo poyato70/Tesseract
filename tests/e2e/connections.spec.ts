@@ -1,0 +1,200 @@
+import { test, expect } from "./fixtures.js";
+const tenantId = "11111111-1111-4111-8111-111111111111",
+  clientId = "22222222-2222-4222-8222-222222222222";
+test("saves a named application access without reading back its Secret Value", async ({
+  page,
+}) => {
+  let profiles: any[] = [];
+  let saved: any;
+  await page.route("**/api/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    let json: any = [];
+    if (path === "/api/bootstrap")
+      json = {
+        csrf: "test",
+        authenticated: false,
+        configured: false,
+        tenantId: "",
+        clientId: "",
+        period: {
+          from: "2026-09-01",
+          toExclusive: "2026-11-01",
+          timeZone: "America/Sao_Paulo",
+        },
+      };
+    if (path === "/api/accesses") {
+      if (route.request().method() === "POST") {
+        saved = route.request().postDataJSON();
+        profiles = [
+          {
+            ...saved,
+            id: clientId,
+            secretAction: undefined,
+            secretConfigured: true,
+            configurationVersion: 1,
+            credentialVersion: 1,
+          },
+        ];
+        json = profiles[0];
+      } else json = profiles;
+    }
+    await route.fulfill({ json });
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Acessos", exact: true }).click();
+  await page.getByLabel("Nome", { exact: true }).fill("Aplicação de teste");
+  await page.getByLabel("Tenant ID", { exact: true }).fill(tenantId);
+  await page
+    .getByLabel("Application (Client) ID", { exact: true })
+    .fill(clientId);
+  await page.getByLabel("Modo preferido").selectOption("application");
+  await page
+    .getByLabel("Secret Value", { exact: true })
+    .selectOption("replace");
+  await page
+    .getByLabel("Valor do Secret (não é Secret ID)")
+    .fill("synthetic-only-secret");
+  await page.getByRole("button", { name: "Salvar acesso" }).click();
+  await expect(
+    page.getByText("Secret configurado", { exact: false }),
+  ).toBeVisible();
+  expect(saved.secretAction.value).toBe("synthetic-only-secret");
+  await expect(page.locator("input[type=password]")).toHaveCount(0);
+});
+test("exposes the independent agent selector and MCP configuration", async ({
+  page,
+}) => {
+  await page.route("**/api/**", async (r) => {
+    const path = new URL(r.request().url()).pathname;
+    await r.fulfill({
+      json:
+        path === "/api/bootstrap"
+          ? {
+              csrf: "test",
+              authenticated: false,
+              configured: false,
+              tenantId: "",
+              clientId: "",
+              period: {
+                from: "2026-09-01",
+                toExclusive: "2026-11-01",
+                timeZone: "America/Sao_Paulo",
+              },
+            }
+          : [],
+    });
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Chat", exact: true }).click();
+  await page.getByLabel("Assistente do chat").selectOption("agent");
+  await expect(
+    page.getByLabel("Agente cadastrado", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "MCPs", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Conexões MCP" }),
+  ).toBeVisible();
+  await page.getByLabel("Serviço", { exact: true }).selectOption("powerbi");
+  await expect(page.getByLabel("Endpoint MCP")).toHaveValue(
+    "https://api.fabric.microsoft.com/v1/mcp/powerbi",
+  );
+});
+
+test("shows application connection feedback beneath the selected access buttons", async ({
+  page,
+}, testInfo) => {
+  let fail = false;
+  await page.route("**/api/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith("/test")) {
+      await route.fulfill({
+        json: {
+          message: "Secret aceito. Permissões serão verificadas na consulta.",
+        },
+      });
+      return;
+    }
+    if (path.endsWith("/connect")) {
+      await route.fulfill({
+        status: fail ? 403 : 200,
+        json: fail
+          ? { message: "Sem permissão para conectar este acesso." }
+          : { connected: true },
+      });
+      return;
+    }
+    let json: any = [];
+    if (path === "/api/bootstrap")
+      json = {
+        csrf: "test",
+        authenticated: false,
+        configured: false,
+        tenantId,
+        clientId,
+        period: {
+          from: "2026-09-01",
+          toExclusive: "2026-11-01",
+          timeZone: "America/Sao_Paulo",
+        },
+      };
+    if (path === "/api/accesses")
+      json = [
+        {
+          id: clientId,
+          name: "Aplicação de teste",
+          tenantId,
+          clientId,
+          preferredMode: "application",
+          secretConfigured: true,
+          configurationVersion: 1,
+          credentialVersion: 1,
+        },
+      ];
+    await route.fulfill({ json });
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Acessos", exact: true }).click();
+  const card = page.locator("article").filter({
+    has: page.getByRole("heading", {
+      name: "Aplicação de teste",
+      exact: true,
+    }),
+  });
+  await card
+    .getByRole("button", { name: "Conectar aplicação", exact: true })
+    .click();
+  const confirmation = card.getByRole("status");
+  await expect(confirmation).toHaveText("Aplicação conectada com sucesso.");
+  await expect(
+    page.getByText("Aplicação conectada com sucesso.", { exact: true }),
+  ).toHaveCount(1);
+  const actions = await card.locator(".actions").boundingBox(),
+    feedback = await confirmation.boundingBox();
+  expect(feedback!.y).toBeGreaterThanOrEqual(actions!.y + actions!.height);
+  await page.screenshot({
+    path: testInfo.outputPath("access-connection-feedback.png"),
+    fullPage: true,
+  });
+  fail = true;
+  await card
+    .getByRole("button", { name: "Conectar aplicação", exact: true })
+    .click();
+  await expect(card.getByRole("alert")).toHaveText(
+    "Sem permissão para conectar este acesso.",
+  );
+  await expect(card.getByRole("status")).toHaveCount(0);
+  await card
+    .getByRole("button", { name: "Testar Secret", exact: true })
+    .click();
+  const secretStatus = card.getByRole("status");
+  await expect(secretStatus).toHaveText(
+    "Secret aceito. Permissões serão verificadas na consulta.",
+  );
+  const secretBox = await secretStatus.boundingBox();
+  expect(secretBox!.y).toBeGreaterThanOrEqual(actions!.y + actions!.height);
+  await expect(
+    page.getByText("Secret aceito. Permissões serão verificadas na consulta.", {
+      exact: true,
+    }),
+  ).toHaveCount(1);
+});
