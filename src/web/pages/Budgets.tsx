@@ -1,3 +1,4 @@
+import { TesseractLoader } from "../flow/TesseractLoader.js";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BarChart,
@@ -85,7 +86,7 @@ export function Budgets({ scope }: { scope?: Scope }) {
           <p>Acompanhe limites e consumo do escopo selecionado.</p>
         </div>
         <button className="primary" disabled={!scope || busy} onClick={load}>
-          {busy ? "Consultando…" : "Consultar budgets"}
+          {busy ? <><TesseractLoader size={18} /> Consultando…</> : "Consultar budgets"}
         </button>
       </div>
       {error && (

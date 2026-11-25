@@ -1,3 +1,4 @@
+import { TesseractLoader } from "../flow/TesseractLoader.js";
 import { useEffect, useRef, useState } from "react";
 import { cloudDefaults } from "../../shared/cloud-defaults.js";
 import {
@@ -219,7 +220,7 @@ export function CloudDefaults({
             />
           </label>
           <button className="primary" disabled={busy} aria-busy={busy}>
-            {busy ? "Consultando…" : "Consultar tokens"}
+            {busy ? <><TesseractLoader size={18} /> Consultando…</> : "Consultar tokens"}
           </button>
           {error && (
             <p

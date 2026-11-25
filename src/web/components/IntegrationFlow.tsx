@@ -1,3 +1,4 @@
+import { TesseractLoader } from "../flow/TesseractLoader.js";
 import { useState } from "react";
 import {
   ArrowDown,
@@ -220,7 +221,7 @@ export function IntegrationFlow({
             {onRefresh && (
               <div>
                 <button type="button" disabled={refreshing} onClick={onRefresh}>
-                  {refreshing ? "Atualizando…" : "Atualizar estado"}
+                  {refreshing ? <><TesseractLoader size={18} /> Atualizando…</> : "Atualizar estado"}
                 </button>
               </div>
             )}

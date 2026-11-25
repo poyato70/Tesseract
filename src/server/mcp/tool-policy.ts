@@ -70,7 +70,14 @@ export function reviewReason(p: McpProfile, t: ToolDescriptor): string | undefin
     if (t.annotations?.destructiveHint === true) return "O servidor marcou esta tool como destrutiva (destructiveHint).";
     return "O servidor não declarou esta tool como somente leitura (readOnlyHint). Peça ao mantenedor do servidor para anotar, ou use o modo somente leitura do servidor.";
   }
-  return "Fora da lista de leituras revisadas para este serviço Microsoft.";
+  const a: any = t.annotations || {};
+  if (a.destructiveHint === true) return "A Microsoft marcou esta tool como destrutiva (destructiveHint): altera estado.";
+  if (a.readOnlyHint === false) return "A Microsoft não marcou esta tool como somente leitura (readOnlyHint=false).";
+  return "Sem anotação de somente leitura e fora da lista de leituras revisadas para este serviço Microsoft.";
+}
+export function annotatedReadOnly(t: ToolDescriptor) {
+  const a: any = t.annotations || {};
+  return a.readOnlyHint === true && a.destructiveHint === false && a.secretHint !== true;
 }
 export function reviewable(p: McpProfile, t: ToolDescriptor) {
   const n = t.name.toLowerCase();
@@ -88,6 +95,9 @@ export function reviewable(p: McpProfile, t: ToolDescriptor) {
       t.annotations?.readOnlyHint === true &&
       t.annotations?.destructiveHint !== true
     );
+  // azmcp é iniciado com --read-only; vale a anotação oficial da Microsoft
+  // (readOnlyHint=true e destructiveHint=false), além do bloqueio por nome.
+  if ((p.preset === "azure" || p.preset === "adx") && annotatedReadOnly(t)) return true;
   const patterns: Record<string, RegExp> = {
     arm: /^(query_costs|execute_query|forecast_costs|list_budgets|get_budget|list_dimensions)$/,
     azure:

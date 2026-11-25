@@ -1,3 +1,4 @@
+import { annotationLabels, toolHint } from "../../shared/tool-hints.js";
 import { TesseractLoader } from "../flow/TesseractLoader.js";
 import { useMemo, useState, type FormEvent } from "react";
 import { CheckCircle2, CircleDashed, Play, PlugZap, Search, ShieldCheck, Unplug } from "lucide-react";
@@ -11,6 +12,26 @@ import { isAdvisorProfile, resultCount, type IntegrationProfile, type LastResult
 
 /** Últimos argumentos por integração+tool, só em memória da aba. */
 const lastArgs = new Map<string, Record<string, unknown>>();
+
+/** Selos das anotações MCP declaradas pelo servidor (hints). */
+export function AnnotationBadges({ annotations }: { annotations?: Record<string, unknown> }) {
+  const a = annotations || {};
+  const shown = annotationLabels.filter((x) => typeof a[x.key] === "boolean");
+  if (!shown.length) return <span className="tt-ann is-none">Servidor não declarou anotações</span>;
+  return (
+    <span className="tt-anns">
+      {shown.map((x) => {
+        const on = a[x.key] === true;
+        const ok = on === x.good;
+        return (
+          <span key={x.key} className={`tt-ann ${ok ? "is-ok" : "is-warn"}`} title={`${x.key}=${on} — ${x.help}`}>
+            {on ? x.label : `Não ${x.label.toLowerCase()}`}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
 
 export function defaultArguments(profile: IntegrationProfile, tool?: ListedTool) {
   if (!tool) return {};
@@ -217,7 +238,7 @@ export function ToolTester({
         {step(1, !!profile.connected && !!tools, "Conectar e listar tools", "Inicia o servidor (STDIO) ou abre a sessão HTTP e pede a lista de tools.")}
         <div className="tt-actions">
           <button type="button" className="lx-btn lx-btn--primary" disabled={!!busy} onClick={() => void connect()}>
-            {busy === "connect" ? <TesseractLoader size={16} /> : <PlugZap size={15} aria-hidden="true" />} {busy === "connect" ? "Conectando…" : tools ? "Listar novamente" : "Conectar e listar tools"}
+            {busy === "connect" ? "" : <PlugZap size={15} aria-hidden="true" />} {busy === "connect" ? <><TesseractLoader size={18} /> Conectando…</> : tools ? "Listar novamente" : "Conectar e listar tools"}
           </button>
           {profile.connected && (
             <button type="button" className="lx-btn" disabled={!!busy} onClick={() => void disconnect()}>
@@ -226,7 +247,7 @@ export function ToolTester({
           )}
         </div>
         {profile.transport === "stdio" && !tools && (
-          <p className="tt-fine">A primeira conexão STDIO pode baixar a versão oficial fixada do pacote (Azure 3.0.0 / Fabric 1.7.0).</p>
+          <p className="tt-fine">A primeira conexão STDIO pode baixar a versão oficial fixada do pacote (Azure 3.0.0 ou a prévia escolhida / Fabric 1.7.0).</p>
         )}
       </section>
 
@@ -254,7 +275,9 @@ export function ToolTester({
                     />
                     <span>
                       <strong>{t.name}</strong>
-                      <small>{t.reviewable ? t.description?.slice(0, 180) || "Leitura disponível para aprovação." : (t as any).blockedReason || "Bloqueada pela política de leitura desta conexão."}</small>
+                      <small>{toolHint(t.name)?.purpose || (t.reviewable ? t.description?.slice(0, 180) || "Leitura disponível para aprovação." : "")}</small>
+                      {!t.reviewable && <small className="tt-blocked">{(t as any).blockedReason || "Bloqueada pela política de leitura desta conexão."}</small>}
+                      <AnnotationBadges annotations={(t as any).annotations} />
                     </span>
                     {t.approved ? <CheckCircle2 size={16} className="tt-ok" aria-label="Aprovada" /> : <CircleDashed size={16} className="tt-muted" aria-label="Não aprovada" />}
                   </label>
@@ -264,7 +287,7 @@ export function ToolTester({
             {filtered.length === 0 && <p role="status">Nenhuma tool corresponde ao filtro.</p>}
             <div className="tt-actions">
               <button type="button" className={`lx-btn${dirty ? " lx-btn--primary" : ""}`} disabled={!dirty || !!busy} onClick={() => void saveApprovals()}>
-                {busy === "approve" ? "Salvando…" : "Salvar aprovações"}
+                {busy === "approve" ? <><TesseractLoader size={18} /> Salvando…</> : "Salvar aprovações"}
               </button>
               {dirty && <span className="tt-fine">Há alterações não salvas.</span>}
             </div>
@@ -290,6 +313,34 @@ export function ToolTester({
               ))}
             </select>
           </label>
+          {selected && toolHint(selected.name) && (
+            <div className="tt-hint">
+              <p>{toolHint(selected.name)!.purpose}</p>
+              {toolHint(selected.name)!.examples.length > 0 && (
+                <>
+                  <small>Exemplos para perguntar no chat:</small>
+                  <ul>
+                    {toolHint(selected.name)!.examples.map((q) => (
+                      <li key={q}>
+                        <a
+                          href="/ia/chat"
+                          onClick={() => {
+                            try {
+                              sessionStorage.setItem("tesseract-chat-draft", q);
+                            } catch {
+                              /* sem storage */
+                            }
+                          }}
+                        >
+                          {q}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
+          )}
           {selected && (
             <>
               {!advanced && resolveSchema(selected.inputSchema, selected.inputSchema)?.properties && (
@@ -318,7 +369,7 @@ export function ToolTester({
           )}
           <div className="tt-actions">
             <button className="lx-btn lx-btn--primary" type="submit" disabled={!selected || running}>
-              {running ? <TesseractLoader size={16} /> : <Play size={15} aria-hidden="true" />} {running ? "Executando…" : "Executar"}
+              {running ? "" : <Play size={15} aria-hidden="true" />} {running ? <><TesseractLoader size={18} /> Executando…</> : "Executar"}
             </button>
           </div>
           {execError && (

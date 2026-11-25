@@ -494,7 +494,7 @@ export function App() {
                   <input value={client} onChange={(e) => setClient(e.target.value)} placeholder="Identificador do aplicativo público" required pattern="[0-9a-fA-F-]{36}" />
                 </label>
                 <button className="lx-btn lx-btn--primary" type="submit" disabled={loginPending}>
-                  {loginPending ? "Aguardando login…" : "Entrar com Microsoft ↗"}
+                  {loginPending ? <><TesseractLoader size={18} /> Aguardando login…</> : "Entrar com Microsoft ↗"}
                 </button>
                 <small>Callback: {window.location.origin}/api/auth/callback · aplicativo público, sem Client Secret</small>
               </form>
@@ -863,7 +863,7 @@ export function App() {
           <footer className="lx-footer">
             <span>TESSERACT · FinOps e IA, decisões informadas.</span>
             <button type="button" className="if-link" onClick={() => setOpeningOpen(true)}>
-              Abertura animada
+              Viemos em paz
             </button>
             <span>America/Sao_Paulo · valores na moeda de origem</span>
           </footer>

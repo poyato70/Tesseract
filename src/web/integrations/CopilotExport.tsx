@@ -4,7 +4,7 @@
  */
 import { useState } from "react";
 import { Copy } from "lucide-react";
-import { nativePreset } from "../../shared/mcp-catalog.js";
+import { azmcpPackage, nativePreset } from "../../shared/mcp-catalog.js";
 import type { IntegrationProfile } from "./model.js";
 
 export function copilotConfig(p: IntegrationProfile) {
@@ -24,7 +24,7 @@ export function copilotConfig(p: IntegrationProfile) {
     for (const k of native.envKeys || []) if (!/PROFILE|REGION|HOST|TOOLSETS|KUBECONFIG/.test(k) || k === "GITHUB_PERSONAL_ACCESS_TOKEN") env[k] = secret(k, k);
     server = { type: "stdio", command: native.runner.command, args: native.runner.args, env };
   } else {
-    const args = ["-y", p.preset === "fabric" ? "@microsoft/fabric-mcp@1.7.0" : "@azure/mcp@3.0.0", "server", "start", "--read-only"];
+    const args = ["-y", p.preset === "fabric" ? "@microsoft/fabric-mcp@1.7.0" : azmcpPackage(p.resourceContext?.azmcpVersion), "server", "start", "--read-only"];
     if (p.preset === "azure") args.push("--namespace", p.resourceContext?.namespace || "pricing");
     if (p.preset === "adx") args.push("--namespace", "kusto");
     server = {

@@ -71,7 +71,7 @@ export function CopilotSeats({ profiles, onOpenCatalog }: { profiles: Integratio
           <input inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="opcional" />
         </label>
         <button className="lx-btn lx-btn--primary" disabled={busy || !conn}>
-          {busy ? <TesseractLoader size={16} /> : <RefreshCw size={14} aria-hidden="true" />} {busy ? "Consultando…" : "Consultar licenças"}
+          {busy ? "" : <RefreshCw size={14} aria-hidden="true" />} {busy ? <><TesseractLoader size={18} /> Consultando…</> : "Consultar licenças"}
         </button>
       </form>
       {error && (

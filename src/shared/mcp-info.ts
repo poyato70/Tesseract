@@ -1,4 +1,4 @@
-import { nativePreset } from "./mcp-catalog.js";
+import { azmcpPackage, nativePreset } from "./mcp-catalog.js";
 export function describeMcp(p: {
   preset: string;
   transport: string;
@@ -80,7 +80,7 @@ export function describeMcp(p: {
       "Pacote",
       p.preset === "fabric"
         ? "@microsoft/fabric-mcp@1.7.0"
-        : "@azure/mcp@3.0.0",
+        : azmcpPackage(p.resourceContext?.azmcpVersion),
     ]);
     rows.push([
       "Destino dos dados",

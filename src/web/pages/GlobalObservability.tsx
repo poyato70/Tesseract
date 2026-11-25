@@ -1,3 +1,4 @@
+import { TesseractLoader } from "../flow/TesseractLoader.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Activity, AlertTriangle, Check, CircleHelp, Minus, Plus, RefreshCw, Server, Waypoints } from "lucide-react";
 import type { PointerEvent as ReactPointerEvent } from "react";
@@ -144,7 +145,7 @@ export function GlobalObservability() {
     <section className="observability" aria-labelledby="observability-title">
       <div className="observability-heading">
         <div><span className="eyebrow">EXPERIMENTO · SOMENTE LEITURA</span><h2 id="observability-title">Observabilidade global</h2><p>Mapa do serviço local e dos registros disponíveis nesta sessão.</p></div>
-        <div className="observability-meta"><span>{snapshot.checkedAt ? `${clock - Date.parse(snapshot.checkedAt) > 60000 ? "Dados desatualizados · " : snapshot.errors.length > 0 ? "Consulta parcial · " : "Consulta concluída · "}${new Date(snapshot.checkedAt).toLocaleTimeString("pt-BR")}` : "Sem verificação"}</span><button type="button" className="neo-raised obs-refresh" onClick={() => void refresh()} disabled={loading}><RefreshCw size={16} aria-hidden="true" />{loading ? "Atualizando…" : "Atualizar"}</button></div>
+        <div className="observability-meta"><span>{snapshot.checkedAt ? `${clock - Date.parse(snapshot.checkedAt) > 60000 ? "Dados desatualizados · " : snapshot.errors.length > 0 ? "Consulta parcial · " : "Consulta concluída · "}${new Date(snapshot.checkedAt).toLocaleTimeString("pt-BR")}` : "Sem verificação"}</span><button type="button" className="neo-raised obs-refresh" onClick={() => void refresh()} disabled={loading}><RefreshCw size={16} aria-hidden="true" />{loading ? <><TesseractLoader size={18} /> Atualizando…</> : "Atualizar"}</button></div>
       </div>
       <p className="obs-readonly"><Check size={15} aria-hidden="true" /> Esta tela consulta endpoints existentes com GET. Não executa ferramentas nem altera conexões, rotas ou fluxos.</p>
       {snapshot.errors.length > 0 && <div role="status" className="obs-warning"><CircleHelp size={17} aria-hidden="true" />{snapshot.errors.join(" ")} Consulte o resultado e o momento da leitura no Inspector.</div>}

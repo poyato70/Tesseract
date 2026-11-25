@@ -1,3 +1,4 @@
+import { TesseractLoader } from "../flow/TesseractLoader.js";
 import { useEffect, useRef, useState } from "react";
 import type {
   Scope,
@@ -7,6 +8,15 @@ import type {
 } from "../../shared/contracts.js";
 import { api, money } from "../api.js";
 import type { PublicAgent, DataSelection } from "../../shared/connections.js";
+type EntryKind = "user" | "answer" | "context" | "usage" | "evidence" | "warning";
+
+/** Negrito em **texto** sem HTML arbitrário. */
+function richText(text: string) {
+  return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
+    /^\*\*[^*]+\*\*$/.test(part) ? <strong key={i}>{part.slice(2, -2)}</strong> : part,
+  );
+}
+
 export function Chat({
   scope,
   independent = false,
@@ -34,12 +44,20 @@ export function Chat({
       independent ? "agent" : "copilot",
     ),
     [agentId, setAgentId] = useState("");
-  const [message, setMessage] = useState(""),
+  const [message, setMessage] = useState(() => {
+      try {
+        const draft = sessionStorage.getItem("tesseract-chat-draft") || "";
+        sessionStorage.removeItem("tesseract-chat-draft");
+        return draft;
+      } catch {
+        return "";
+      }
+    }),
     [consent, setConsent] = useState(false),
     [busy, setBusy] = useState(false),
     [status, setStatus] = useState(""),
     [entries, setEntries] = useState<
-      { role: string; text: string; result?: CostResult; evidence?: unknown }[]
+      { role: string; kind?: EntryKind; text: string; result?: CostResult; evidence?: unknown }[]
     >([]);
   const actualSource = selectedSource || selection?.source || "api";
   const mcpReady =
@@ -87,7 +105,7 @@ export function Chat({
     setProgress(["Enviando pergunta ao serviço local…"]);
     const question = message;
     setMessage("");
-    setEntries((e) => [...e, { role: "Você", text: question }]);
+    setEntries((e) => [...e, { role: "Você", kind: "user", text: question }]);
     let insightText = "",
       insightSource = "",
       insightId = "",
@@ -118,6 +136,7 @@ export function Chat({
               ...x,
               {
                 role: "Contexto efetivo da consulta",
+                kind: "context",
                 text: `${e.runtime} · fonte: ${e.source} · tools: ${e.tools.join(", ")} · operação ${e.requestId || "sem ID"} · ${e.scope?.resourceGroup || (independent ? "escopo definido pelo MCP" : "subscription inteira")}`,
               },
             ]);
@@ -126,6 +145,7 @@ export function Chat({
               ...x,
               {
                 role: "Uso desta pergunta",
+                kind: "usage",
                 text: `${e.provider} · ${(e.durationMs / 1000).toFixed(1)}s · ${e.toolCalls} interação(ões) com tools (inclui tentativas) · tokens de entrada: ${e.inputTokens ?? "não informado"} · saída: ${e.outputTokens ?? "não informado"}. Tokens informados pelo provedor; podem ser parciais. Custo monetário indisponível; contagem de tools não é cobrança.`,
               },
             ]);
@@ -137,6 +157,7 @@ export function Chat({
                   runtime === "copilot"
                     ? "Copilot"
                     : agents.find((a) => a.id === agentId)?.name || "Agente",
+                kind: "answer",
                 text: e.text,
               },
             ]);
@@ -154,17 +175,19 @@ export function Chat({
                     : e.type === "mcpEvidence"
                       ? "Retorno MCP"
                       : "Evidência FinOps hub",
+                kind: "evidence",
                 text: "Resultado do serviço, independente do texto do modelo",
                 evidence: e.result,
               },
             ]);
           if (e.type === "error")
-            setEntries((x) => [...x, { role: "Aviso", text: e.message }]);
+            setEntries((x) => [...x, { role: "Aviso", kind: "warning", text: e.message }]);
           if (e.type === "result" && "totals" in e.result)
             setEntries((x) => [
               ...x,
               {
                 role: "Dados consultados",
+                kind: "evidence",
                 text: "Resultado verificado no serviço de custos",
                 result: e.result as CostResult,
               },
@@ -182,7 +205,7 @@ export function Chat({
       if (!c.signal.aborted)
         setEntries((x) => [
           ...x,
-          { role: "Aviso", text: (e as Error).message },
+          { role: "Aviso", kind: "warning", text: (e as Error).message },
         ]);
     } finally {
       if (!c.signal.aborted) setBusy(false);
@@ -289,53 +312,73 @@ export function Chat({
             >
               Quanto gastei nos dois últimos meses? ↗
             </button>
+            <button className="suggestion" onClick={() => setMessage("Quais tools estão disponíveis para o Advisor?")}>
+              Quais tools estão disponíveis para o Advisor? ↗
+            </button>
           </div>
         ) : (
-          entries.map((e, i) => (
-            <article
-              className={"chat-message " + (e.role === "Você" ? "user" : "")}
-              key={i}
-            >
-              <strong>{e.role}</strong>
-              <p>{e.text}</p>
-              {e.evidence !== undefined && (
-                <details>
-                  <summary>Ver dados e avisos da consulta</summary>
-                  <pre
-                    style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}
-                  >
-                    {JSON.stringify(e.evidence, null, 2)}
-                  </pre>
-                </details>
-              )}
-              {e.result && (
-                <div>
-                  {e.result.totals.map((t) => (
-                    <div key={t.currency}>{money(t.amount, t.currency)}</div>
-                  ))}
-                  {e.result.meta.warnings.map((w) => (
-                    <p key={w}>{w}</p>
-                  ))}
-                  <small>
-                    {e.result.meta.period?.from} a{" "}
-                    {e.result.meta.period?.toExclusive} (fim exclusivo) ·{" "}
-                    {e.result.meta.source}
-                  </small>
-                </div>
-              )}
-            </article>
-          ))
+          entries.map((e, i) =>
+            e.kind === "context" ? (
+              <p className="chat-meta" key={i}>
+                <span className="chat-tag">Contexto</span> {e.text}
+              </p>
+            ) : e.kind === "usage" ? (
+              <p className="chat-usage" key={i}>
+                <span className="chat-tag">Uso</span> {e.text}
+              </p>
+            ) : e.kind === "warning" ? (
+              <p className="chat-warning" role="alert" key={i}>
+                <strong>Aviso</strong> {e.text}
+              </p>
+            ) : (
+              <article
+                className={`chat-msg is-${e.kind || "answer"}`}
+                key={i}
+              >
+                <header>
+                  {e.kind === "answer" && <span className="chat-avatar" aria-hidden="true">◆</span>}
+                  <strong>{e.role}</strong>
+                </header>
+                <p>{e.kind === "answer" ? richText(e.text) : e.text}</p>
+                {e.evidence !== undefined && (
+                  <details>
+                    <summary>Ver dados e avisos da consulta</summary>
+                    <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+                      {JSON.stringify(e.evidence, null, 2)}
+                    </pre>
+                  </details>
+                )}
+                {e.result && (
+                  <div>
+                    {e.result.totals.map((t) => (
+                      <div key={t.currency}>{money(t.amount, t.currency)}</div>
+                    ))}
+                    {e.result.meta.warnings.map((w) => (
+                      <p key={w}>{w}</p>
+                    ))}
+                    <small>
+                      {e.result.meta.period?.from} a {e.result.meta.period?.toExclusive} (fim exclusivo) · {e.result.meta.source}
+                    </small>
+                  </div>
+                )}
+              </article>
+            ),
+          )
         )}
       </div>
       {(busy || progress.length > 0) && (
-        <div className="chat-progress" role="status">
-          <strong>{busy ? "Em execução" : "Execução encerrada"}</strong>
+        <details className={`chat-log${busy ? " is-busy" : ""}`} open={busy} role="status">
+          <summary>
+            {busy ? <TesseractLoader size={18} /> : null}
+            <span>{busy ? "Processando" : "Registro de execução"}</span>
+            <small>{progress.length} passo(s)</small>
+          </summary>
           <ol>
             {progress.map((p, i) => (
               <li key={i}>{p}</li>
             ))}
           </ol>
-        </div>
+        </details>
       )}
       <div className="chat-compose">
         <label className="consent">
@@ -400,7 +443,7 @@ export function Chat({
             }
             onClick={send}
           >
-            {busy ? "Consultando…" : "Enviar pergunta"}
+            {busy ? <><TesseractLoader size={18} /> Consultando…</> : "Enviar pergunta"}
           </button>
           {busy && (
             <button

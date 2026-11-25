@@ -1,3 +1,4 @@
+import { TesseractLoader } from "../flow/TesseractLoader.js";
 import { useEffect, useRef, useState } from "react";
 import { manageRequest } from "../api.js";
 export function RegistrySearch({
@@ -78,7 +79,7 @@ export function RegistrySearch({
           />
         </label>
         <button className="primary" disabled={busy}>
-          {busy ? "Buscando…" : "Buscar servidores"}
+          {busy ? <><TesseractLoader size={18} /> Buscando…</> : "Buscar servidores"}
         </button>
       </form>
       <div className="actions">

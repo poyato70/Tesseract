@@ -116,7 +116,7 @@ test("3 · cria integração, conecta, aprova e executa", async ({ page }) => {
 
 test("4 · centro operacional mostra a integração sem contar leituras automáticas", async ({ page }) => {
   await page.goto(base + "/");
-  await expect(page.locator(".fc-card").filter({ hasText: "Servidor E2E" })).toBeVisible();
+  await expect(page.locator(".fc-card").filter({ hasText: "Servidor E2E" }).first()).toBeVisible();
   await expect(page.getByText(/ações · sem leituras automáticas/)).toBeVisible();
   await expect(page.locator(".op-feed")).not.toContainText("GET /api/");
 });
@@ -124,6 +124,6 @@ test("4 · centro operacional mostra a integração sem contar leituras automát
 test("5 · tela estreita usa lista vertical", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(base + "/");
-  await expect(page.locator(".op-lane").filter({ hasText: "Servidor E2E" })).toBeVisible();
+  await expect(page.locator(".op-lane").filter({ hasText: "Servidor E2E" }).first()).toBeVisible();
   await expect(page.locator(".op-canvas")).toBeHidden();
 });

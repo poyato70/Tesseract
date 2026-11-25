@@ -1,3 +1,4 @@
+import { TesseractLoader } from "../flow/TesseractLoader.js";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ComposedChart,
@@ -101,7 +102,7 @@ export function Forecast({
           Incluir realizados, apresentados separadamente
         </label>
         <button disabled={!scope || busy} onClick={() => void run()}>
-          {busy ? "Consultando previsão…" : "Consultar previsão Azure"}
+          {busy ? <><TesseractLoader size={18} /> Consultando previsão…</> : "Consultar previsão Azure"}
         </button>
       </div>
       {error && (

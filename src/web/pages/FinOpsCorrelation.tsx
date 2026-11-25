@@ -1,3 +1,4 @@
+import { TesseractLoader } from "../flow/TesseractLoader.js";
 import { useEffect, useMemo, useState } from "react";
 import { manageRequest } from "../api.js";
 
@@ -318,7 +319,7 @@ export function FinOpsCorrelation({ profiles }: { profiles: any[] }) {
             (sourceMode === "azure-arm-mcp" && (!serverA || serverA !== serverB || !/^\/subscriptions\//i.test(scope)))
           }
         >
-          {busy ? "Executando…" : sourceMode === "azure-arm-mcp" ? "Consultar custos e inventário Azure" : "Executar correlação A → B"}
+          {busy ? <><TesseractLoader size={18} /> Executando…</> : sourceMode === "azure-arm-mcp" ? "Consultar custos e inventário Azure" : "Executar correlação A → B"}
         </button>
         {error && (
           <p role="alert" className="error-text">

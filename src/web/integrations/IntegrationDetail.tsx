@@ -14,7 +14,6 @@ import {
   Settings2,
   Workflow,
   XCircle,
-  Clock3,
 } from "lucide-react";
 import type { DiagnosticEvent } from "../../server/diagnostics/service.js";
 import type { PublicAccessProfile } from "../../shared/connections.js";
@@ -249,7 +248,7 @@ export function IntegrationDetail({
             {lastAt ? `Última execução: ${new Date(lastAt).toLocaleString("pt-BR")}` : "Sem execução nesta sessão"}
           </span>
           <button type="button" className="lx-btn lx-btn--primary lx-btn--lg" disabled={running} onClick={() => void runNow()}>
-            {running ? <TesseractLoader size={16} /> : <Play size={15} aria-hidden="true" />} {running ? "Executando…" : "Executar agora"}
+            {running ? "" : <Play size={15} aria-hidden="true" />} {running ? <><TesseractLoader size={18} /> Executando…</> : "Executar agora"}
           </button>
         </div>
       </header>
@@ -291,28 +290,42 @@ export function IntegrationDetail({
                 />
               </section>
               <div className="idt-cards">
-                <section className="idt-card">
-                  <h3>Última execução</h3>
+                <section className="idt-card idt-exec">
+                  <header className="idt-card-head">
+                    <h3>Execução</h3>
+                    <button type="button" className="idt-link" onClick={() => onTab(lastDisplay ? "testar" : "atividade")}>
+                      Detalhes →
+                    </button>
+                  </header>
                   {lastAt ? (
                     <div className={`idt-result ${lastOk ? "is-ok" : "is-error"}`}>
-                      {lastOk ? <CheckCircle2 size={30} aria-hidden="true" /> : <XCircle size={30} aria-hidden="true" />}
+                      {lastOk ? <CheckCircle2 size={18} aria-hidden="true" /> : <XCircle size={18} aria-hidden="true" />}
                       <span>
-                        <strong>{lastOk ? "Concluída com sucesso" : "Falhou"}</strong>
+                        <strong>
+                          {lastOk ? "Concluída com sucesso" : "Falhou"}
+                          {lastResult?.count !== undefined ? ` · ${lastResult.count} itens` : ""}
+                        </strong>
                         <small>{new Date(lastAt).toLocaleString("pt-BR")}</small>
                       </span>
                     </div>
                   ) : (
                     <p className="idt-empty">Nenhuma execução nesta sessão. Use “Executar agora” ou a aba Testar.</p>
                   )}
-                  {lastResult?.count !== undefined && (
-                    <p className="idt-big">
-                      <b>{lastResult.count}</b> itens retornados
-                    </p>
-                  )}
                   {lastResult?.message && !lastResult.ok && <p className="idt-empty">{lastResult.message}</p>}
-                  <button type="button" className="lx-btn lx-btn--block" onClick={() => onTab(lastDisplay ? "testar" : "atividade")}>
-                    Ver detalhes da execução →
-                  </button>
+                  <dl className="idt-stats" title="Diagnóstico mantido em memória enquanto a sessão local estiver aberta.">
+                    <div>
+                      <dt>Execuções</dt>
+                      <dd>{metrics.executions}</dd>
+                    </div>
+                    <div>
+                      <dt>Sucesso</dt>
+                      <dd>{metrics.executions ? `${Math.round((metrics.successes / metrics.executions) * 100)}%` : "—"}</dd>
+                    </div>
+                    <div>
+                      <dt>Última duração</dt>
+                      <dd>{lastResult?.durationMs !== undefined ? formatDuration(lastResult.durationMs) : exec?.spanMs !== undefined ? formatDuration(exec.spanMs) : "—"}</dd>
+                    </div>
+                  </dl>
                 </section>
 
                 <section className="idt-card">
@@ -341,28 +354,7 @@ export function IntegrationDetail({
                 </section>
 
                 <section className="idt-card">
-                  <h3>Métricas desta sessão</h3>
-                  <div className="idt-metrics">
-                    <div>
-                      <small>Execuções</small>
-                      <b>{metrics.executions}</b>
-                    </div>
-                    <div>
-                      <small>Taxa de sucesso</small>
-                      <b>{metrics.executions ? `${Math.round((metrics.successes / metrics.executions) * 100)}%` : "—"}</b>
-                    </div>
-                    <div>
-                      <small>Última duração</small>
-                      <b>{lastResult?.durationMs !== undefined ? formatDuration(lastResult.durationMs) : exec?.spanMs !== undefined ? formatDuration(exec.spanMs) : "—"}</b>
-                    </div>
-                  </div>
-                  <p className="idt-fine">
-                    <Clock3 size={12} aria-hidden="true" /> Diagnóstico mantido em memória enquanto a sessão local estiver aberta.
-                  </p>
-                </section>
-
-                <section className="idt-card">
-                  <h3>Status dos componentes</h3>
+                  <h3>Componentes</h3>
                   <ul className="idt-status">
                     {graph.nodes.map((n) => (
                       <li key={n.id}>
@@ -371,10 +363,8 @@ export function IntegrationDetail({
                           setSideTab("no");
                         }}>
                           <i className={`is-${n.state}`} aria-hidden="true" />
-                          <span>
-                            <strong>{n.title}</strong>
-                            <small>{n.stateLabel}</small>
-                          </span>
+                          <strong>{n.title}</strong>
+                          <small>{n.stateLabel}</small>
                         </button>
                       </li>
                     ))}
@@ -516,7 +506,7 @@ export function IntegrationDetail({
           <header>
             <h2>Atividade desta integração</h2>
             <button type="button" className="lx-btn" disabled={refreshing} onClick={onRefresh}>
-              <RefreshCw size={14} aria-hidden="true" /> {refreshing ? "Atualizando…" : "Atualizar"}
+              {!refreshing && <RefreshCw size={14} aria-hidden="true" />} {refreshing ? <><TesseractLoader size={18} /> Atualizando…</> : "Atualizar"}
             </button>
           </header>
           <p className="idt-fine">Eventos registrados pelo serviço local nesta sessão. Argumentos e credenciais não são gravados.</p>

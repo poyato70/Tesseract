@@ -144,6 +144,8 @@ function explodeAlien(i){const a=S.aliens[i];if(a.dead)return;a.dead=true;const 
 function buildEvents(){
  ev(T_SPIN,()=>{S.shake=12;sfx('thud');});
  ev(T_BREAK,breakTess);
+ // os aliens terminam de chegar em ~3,1 s: a primeira fala é para o povo da Terra
+ ev(3.2,()=>txt(800,360,'Viemos em paz',{size:64,col:'#2b45ff',vy:-2,life:3.4,rot:0}));
  ev(8.6,()=>alText(3,'...'));ev(9.8,()=>alText(0,'...'));
  ev(10.8,()=>soldText(1,'tá funcionando!'));ev(11.0,()=>alText(1,'?'));
  ev(11.8,()=>alText(2,'hm.'));ev(12.3,()=>soldText(0,'será que dói?'));

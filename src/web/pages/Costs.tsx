@@ -1,3 +1,4 @@
+import { TesseractLoader } from "../flow/TesseractLoader.js";
 import { useEffect, useMemo, useState } from "react";
 import { Decimal } from "decimal.js";
 import {
@@ -101,7 +102,7 @@ export function Costs({
           disabled={!query || !connected || busy}
           onClick={() => setVersion((v) => v + 1)}
         >
-          {busy ? "Consultando…" : "Consultar custos"}
+          {busy ? <><TesseractLoader size={18} /> Consultando…</> : "Consultar custos"}
         </button>
       </div>
       <p className="explanation">

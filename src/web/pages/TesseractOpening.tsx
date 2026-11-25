@@ -46,7 +46,7 @@ export function TesseractOpening({ onClose }: { onClose: () => void }) {
   }, [onClose]);
 
   return (
-    <div className="opening-overlay" role="dialog" aria-modal="true" aria-label="Abertura animada do Tesseract">
+    <div className="opening-overlay" role="dialog" aria-modal="true" aria-label="Viemos em paz — abertura animada do Tesseract">
       <button
         className="opening-close"
         type="button"

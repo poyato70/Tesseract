@@ -1,3 +1,4 @@
+import { TesseractLoader } from "../flow/TesseractLoader.js";
 import { useEffect, useState } from "react";
 import type { PublicAccessProfile } from "../../shared/connections.js";
 import { manageRequest } from "../api.js";
@@ -273,7 +274,7 @@ export function Accesses({
                   className={"access-feedback " + testFeedback.kind}
                   role={testFeedback.kind === "error" ? "alert" : "status"}
                 >
-                  {testFeedback.message}
+                  {testFeedback.kind === "pending" && <TesseractLoader size={18} />} {testFeedback.message}
                 </p>
               )}
               {connectionFeedback?.id === p.id && testFeedback?.id !== p.id && (
@@ -283,7 +284,7 @@ export function Accesses({
                     connectionFeedback.kind === "error" ? "alert" : "status"
                   }
                 >
-                  {connectionFeedback.message}
+                  {connectionFeedback.kind === "pending" && <TesseractLoader size={18} />} {connectionFeedback.message}
                 </p>
               )}
             </article>

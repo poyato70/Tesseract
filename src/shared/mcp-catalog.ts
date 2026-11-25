@@ -305,7 +305,20 @@ export function parseEnvSecret(text: string, allowed: string[]) {
   return out;
 }
 
-/** Namespaces do azmcp 3.0 liberados em modo somente leitura. */
+/** Versões do Azure MCP Server aceitas (pacote fixado). */
+export const azmcpVersions = [
+  { id: "3.0.0", label: "3.0.0 · estável", note: "Advisor: 5 tools de leitura." },
+  {
+    id: "4.0.0-beta.10",
+    label: "4.0.0-beta.10 · prévia",
+    note: "Advisor: 8 tools de leitura (+ insights, pré-validação de remoção e inteligência de service groups). Versão beta.",
+  },
+] as const;
+export function azmcpPackage(version?: string) {
+  return "@azure/mcp@" + (azmcpVersions.some((v) => v.id === version) ? version : "3.0.0");
+}
+
+/** Namespaces do azmcp liberados em modo somente leitura. */
 export const azureNamespaces: { id: string; label: string; group: string }[] = [
   { id: "pricing", label: "Preços de catálogo", group: "FinOps" },
   { id: "advisor", label: "Recomendações Advisor", group: "FinOps" },

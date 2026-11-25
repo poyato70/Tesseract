@@ -102,3 +102,25 @@ Itens e situação em `auditoria-capacidades-ux-2026-11-24.md` (seção 5). Evid
 - Playwright `npm run test:e2e:m22`: 5 de 5 jornadas aprovadas no Chromium contra a pré-visualização Linux (servidor MCP de teste). Execução no Windows/Edge ainda não observada.
 - Não validado: proxy corporativo real, BigQuery com conta de serviço real, API de licenças Copilot com organização real.
 - Publicação: push direto para `poyato70/Tesseract` a partir de clone autenticado da sessão. Capturas desta iteração ficaram fora do Git, conforme AGENTS.md.
+
+## Iteração 5 — Advisor, hints de anotação, chat e loaders (25/11/2026)
+
+Medições desta execução (`@azure/mcp` via npx, `--mode all --namespace advisor`):
+
+| Versão | `--read-only` | Tools anunciadas |
+|---|---|---|
+| 3.0.0 (estável, usada pelo Tesseract) | sim | 5 |
+| 3.0.0 | não | 6 (+ `advisor_recommendation_update`) |
+| 4.0.0-beta.10 | sim | 8 |
+| 4.0.0-beta.10 | não | 9 — corresponde à página do Learn |
+
+Mudanças:
+- Aprovação para `azure`/`adx` passa a aceitar as anotações oficiais (`readOnlyHint=true`, `destructiveHint=false`, sem `secretHint`), mantendo o bloqueio por nome. Antes, só `advisor_recommendation_list` constava da lista revisada; `advisor_metadata_list` e as demais leituras ficavam bloqueadas.
+- Versão do Azure MCP Server por integração: 3.0.0 (padrão) ou 4.0.0-beta.10 (prévia, 8 leituras do Advisor).
+- Aba Testar: selos das anotações MCP, motivo de bloqueio, finalidade de cada tool do Advisor e exemplos de perguntas que abrem o chat já preenchido.
+- Chat: tool `tesseract_catalog` (somente metadados) para responder quais integrações e tools existem; mensagens com visual próprio por tipo (pergunta, resposta, contexto, uso, evidência, aviso) e registro de execução recolhível.
+- Loader tesseract em todos os botões de execução/listagem/consulta (21 telas) e em mensagens de progresso; continua girando, mais devagar, com movimento reduzido.
+- Cartões da integração: Execução (status + métricas) em um cartão, linha do tempo e componentes compactos.
+- Abertura: "Viemos em paz" quando os aliens chegam (≈3,2 s); link do rodapé renomeado.
+
+Validação: Vitest 248 testes (239 aprovados, 8 ignorados, 1 falha intermitente em `orchestration-store.test.ts` que passa isolada — 12/12); Playwright m22 5/5 no Chromium contra a pré-visualização. Não validado aqui: Advisor real com credencial Azure e chat com Copilot autenticado.

@@ -1,3 +1,4 @@
+import { TesseractLoader } from "../flow/TesseractLoader.js";
 import { useEffect, useState } from "react";
 import { manageRequest } from "../api.js";
 import type { KnowledgeDocument } from "../../shared/knowledge.js";
@@ -94,7 +95,7 @@ export function Knowledge() {
             quais eu o vincular.
           </label>
           <button className="primary" disabled={busy || !form.reviewed}>
-            {busy ? "Importando…" : "Importar versão revisada"}
+            {busy ? <><TesseractLoader size={18} /> Importando…</> : "Importar versão revisada"}
           </button>
         </form>
       </details>

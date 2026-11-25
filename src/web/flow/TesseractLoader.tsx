@@ -36,7 +36,8 @@ export function TesseractLoader({ size = 22, label, className = "" }: { size?: n
     let raf = 0;
     const start = performance.now();
     const draw = (now: number) => {
-      const p = project(reduced ? 0.6 : (now - start) / 1000, size);
+      // movimento reduzido: gira devagar (é o único sinal de processamento), sem parar
+      const p = project(((now - start) / 1000) * (reduced ? 0.35 : 1), size);
       EDGES.forEach(([i, j], k) => {
         const l = lines[k];
         l.setAttribute("x1", p[i][0].toFixed(2));
@@ -44,7 +45,7 @@ export function TesseractLoader({ size = 22, label, className = "" }: { size?: n
         l.setAttribute("x2", p[j][0].toFixed(2));
         l.setAttribute("y2", p[j][1].toFixed(2));
       });
-      if (!reduced) raf = requestAnimationFrame(draw);
+      raf = requestAnimationFrame(draw);
     };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);

@@ -111,7 +111,7 @@ export function mcpServerLabel(p: IntegrationProfile) {
   if (p.transport === "stdio")
     return p.preset === "fabric"
       ? { title: "fabric-mcp 1.7.0", subtitle: "Processo local · STDIO" }
-      : { title: "azmcp 3.0.0", subtitle: `Processo local · grupo ${p.resourceContext?.namespace || "padrão"}` };
+      : { title: `azmcp ${p.resourceContext?.azmcpVersion || "3.0.0"}`, subtitle: `Processo local · grupo ${p.resourceContext?.namespace || "padrão"}` };
   return { title: hostOf(p.endpoint) || "Servidor MCP", subtitle: "Servidor remoto · HTTPS" };
 }
 

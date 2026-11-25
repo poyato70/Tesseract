@@ -26,6 +26,7 @@ import type {
   ChatEvent,
 } from "../../shared/contracts.js";
 import { chooseCopilotRuntime } from "./runtime.js";
+import { toolHint } from "../../shared/tool-hints.js";
 import type { McpRegistry } from "../mcp/registry.js";
 import type { DataSelection } from "../../shared/connections.js";
 import { z } from "zod";
@@ -242,6 +243,50 @@ export class CopilotChat {
           },
         });
       }
+      // Catálogo do Tesseract: só metadados (integrações e tools aprovadas),
+      // nenhuma leitura de dados. Permite responder "quais tools existem?".
+      const catalogTool: any = defineTool("tesseract_catalog", {
+        description:
+          "Lista as integrações MCP cadastradas no Tesseract, as tools aprovadas de cada uma (com finalidade e anotações) e as tools anunciadas pelo servidor quando a integração está conectada. Não consulta dados. Use para perguntas como 'quais tools estão disponíveis para o Advisor?'. Para executar uma tool, o usuário precisa escolher a fonte MCP da integração no seletor do chat.",
+        parameters: z.object({ filter: z.string().max(80).optional() }).strict(),
+        skipPermission: true,
+        handler: async (args) => {
+          assertActive(localCtx.signal);
+          if (!this.mcps) return JSON.stringify({ integrations: [] });
+          emit({ type: "progress", message: "Catálogo do Tesseract · listando integrações e tools…" });
+          const q = (args.filter || "").toLowerCase();
+          const list = await this.mcps.list(ctx.sessionId);
+          const out = [];
+          for (const p of list as any[]) {
+            const text = [p.name, p.preset, p.resourceContext?.namespace].join(" ").toLowerCase();
+            if (q && !text.includes(q) && !(p.approvedTools || []).some((t: any) => t.name.includes(q))) continue;
+            let announced: any[] | undefined;
+            if (p.connected)
+              announced = (await this.mcps.tools(localCtx, p.id)).map((t: any) => ({
+                name: t.name,
+                approvable: t.reviewable,
+                approved: t.approved,
+                annotations: t.annotations,
+                purpose: toolHint(t.name)?.purpose,
+                blockedReason: t.blockedReason,
+              }));
+            out.push({
+              integration: p.name,
+              service: p.preset,
+              group: p.resourceContext?.namespace,
+              azmcpVersion: p.resourceContext?.azmcpVersion,
+              connected: !!p.connected,
+              approvedTools: (p.approvedTools || []).map((t: any) => ({ name: t.name, purpose: toolHint(t.name)?.purpose })),
+              announcedTools: announced,
+              howToRun: "Selecione esta integração como fonte MCP no chat ou use Integrações > Testar.",
+            });
+          }
+          return JSON.stringify({
+            integrations: out,
+            note: "announcedTools só aparece para integrações conectadas nesta sessão; approvedTools é o que pode ser executado.",
+          });
+        },
+      });
       localCtx.diagnose?.({
         source: "Copilot",
         operation: "tools disponíveis nesta pergunta",
@@ -263,11 +308,11 @@ export class CopilotChat {
             ? "MCP · " +
               (await this.mcps!.get(input.selection.mcpConnectionId!)).name
             : "APIs Azure Cost Management",
-        tools: [tool.name],
+        tools: [tool.name, catalogTool.name],
         scope: input.scope,
       });
-      const allowedName = tool.name;
-      session = await client.createSession(restrictedSessionConfig([tool]));
+      const allowedNames = [tool.name, catalogTool.name];
+      session = await client.createSession(restrictedSessionConfig([tool, catalogTool]));
       unwatchUsage = session.on((event) => {
         if (event.type !== "assistant.usage") return;
         const { inputTokens: i, outputTokens: o } = event.data;
@@ -281,8 +326,8 @@ export class CopilotChat {
       const items = (metadata as any).tools;
       if (
         !Array.isArray(items) ||
-        items.some((x: any) => x.name !== allowedName) ||
-        !items.some((x: any) => x.name === allowedName)
+        items.some((x: any) => !allowedNames.includes(x.name)) ||
+        !allowedNames.every((n) => items.some((x: any) => x.name === n))
       )
         throw new AppError(
           "forbidden",

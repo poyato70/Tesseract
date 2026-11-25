@@ -1,5 +1,6 @@
+import { TesseractLoader } from "../flow/TesseractLoader.js";
 import { useState } from "react";
-import { Box, Copy } from "lucide-react";
+import { Copy } from "lucide-react";
 import { IntegrationFlow } from "./IntegrationFlow.js";
 import {
   advisorListArguments,
@@ -319,7 +320,7 @@ export function AdvisorQuickStart({
       )}
       {busy && (
         <p role="status" className="integration-progress">
-          <Box size={19} aria-hidden="true" /> {busy}
+          <TesseractLoader size={20} /> {busy}
         </p>
       )}
       {error && (

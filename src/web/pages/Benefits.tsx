@@ -1,3 +1,4 @@
+import { TesseractLoader } from "../flow/TesseractLoader.js";
 import { useEffect, useRef, useState } from "react";
 import type { Scope, BenefitAnalysis } from "../../shared/contracts.js";
 import { api, money } from "../api.js";
@@ -43,7 +44,7 @@ export function Benefits({ scope }: { scope?: Scope }) {
           </p>
         </div>
         <button className="primary" disabled={!scope || busy} onClick={load}>
-          {busy ? "Analisando…" : "Analisar benefícios"}
+          {busy ? <><TesseractLoader size={18} /> Analisando…</> : "Analisar benefícios"}
         </button>
       </div>
       <div className="toolbar">

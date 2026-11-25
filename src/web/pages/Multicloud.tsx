@@ -1,3 +1,4 @@
+import { TesseractLoader } from "../flow/TesseractLoader.js";
 import { useEffect, useRef, useState } from "react";
 import type { CloudResult, CloudQuery } from "../../shared/multicloud.js";
 import { cloudQuerySchema } from "../../shared/multicloud.js";
@@ -372,7 +373,7 @@ export function Multicloud({
             className="primary"
             disabled={busy || !Object.values(enabled).some(Boolean)}
           >
-            {busy ? "Consultando fontes…" : "Consultar fontes selecionadas"}
+            {busy ? <><TesseractLoader size={18} /> Consultando fontes…</> : "Consultar fontes selecionadas"}
           </button>
           {busy && (
             <button

@@ -1,3 +1,4 @@
+import { TesseractLoader } from "../flow/TesseractLoader.js";
 import { useState } from "react";
 import { Activity, ArrowRight, BookOpen, Bot, Boxes, Cloud, Coins, Container, Cpu, Database, FileJson, Gauge, GitBranch, Globe2, Lightbulb, Mail, MessageSquare, Network, Search, Server, ShieldCheck, Sparkles, Users, X } from "lucide-react";
 import { nativePreset } from "../../shared/mcp-catalog.js";
@@ -426,7 +427,7 @@ export function Catalog({
             <input type="checkbox" required checked={trust} onChange={(e) => setTrust(e.target.checked)} /> Confio nesta origem e assumo o risco de avaliar o conteúdo.
           </label>
           <button className="lx-btn" disabled={!trust || busy}>
-            {busy ? "Consultando…" : "Descobrir manifesto"}
+            {busy ? <><TesseractLoader size={18} /> Consultando…</> : "Descobrir manifesto"}
           </button>
         </form>
         {error && <p className="tt-notice is-error" role="alert">{error}</p>}

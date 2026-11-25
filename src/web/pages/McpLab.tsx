@@ -1,3 +1,4 @@
+import { TesseractLoader } from "../flow/TesseractLoader.js";
 import { useEffect, useRef, useState } from "react";
 import { manageRequest } from "../api.js";
 import { DiagnosticPanel } from "./Diagnostics.js";
@@ -264,7 +265,7 @@ export function McpLab({
           aria-busy={busy}
           onClick={() => void run("catalog")}
         >
-          {busy ? "Consultando capacidades…" : "Descobrir capacidades MCP"}
+          {busy ? <><TesseractLoader size={18} /> Consultando capacidades…</> : "Descobrir capacidades MCP"}
         </button>
       )}
       {error && (

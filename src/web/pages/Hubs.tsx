@@ -1,3 +1,4 @@
+import { TesseractLoader } from "../flow/TesseractLoader.js";
 import { useEffect, useState, useRef } from "react";
 import type { Scope, CostQuery } from "../../shared/contracts.js";
 import type { HubProfile } from "../../shared/hubs.js";
@@ -248,7 +249,7 @@ export function Hubs({
                 aria-busy={loginPending}
                 onClick={() => onLogin(h.id)}
               >
-                {loginPending ? "Aguardando autorização…" : "Autorizar ADX (usuário)"}
+                {loginPending ? <><TesseractLoader size={18} /> Aguardando autorização…</> : "Autorizar ADX (usuário)"}
               </button>
               <button onClick={() => setForm(h)}>Editar</button>
               <button

@@ -1,3 +1,4 @@
+import { TesseractLoader } from "../flow/TesseractLoader.js";
 import { isIndependentPreset, nativePreset } from "../../shared/mcp-catalog.js";
 import { describeMcp } from "../../shared/mcp-info.js";
 export function McpDetails({ profile }: { profile: any }) {
@@ -68,7 +69,7 @@ export function McpIdentity({
             aria-busy={loginPending}
             onClick={() => onConnect?.(profile)}
           >
-            {loginPending ? "Aguardando autorização…" : "Autorizar recurso MCP"}
+            {loginPending ? <><TesseractLoader size={18} /> Aguardando autorização…</> : "Autorizar recurso MCP"}
           </button>
         )}
       {!ready && access && (
@@ -77,7 +78,7 @@ export function McpIdentity({
           aria-busy={loginPending}
           onClick={() => onConnect?.(profile)}
         >
-          {loginPending ? "Aguardando login…" : `Conectar identidade ${access.name}`}
+          {loginPending ? <><TesseractLoader size={18} /> Aguardando login…</> : `Conectar identidade ${access.name}`}
         </button>
       )}
     </div>

@@ -29,7 +29,7 @@ import {
   httpAudience,
   independentMcp,
 } from "./presets.js";
-import { nativePreset, parseEnvSecret, azureNamespaces, ownSecret } from "../../shared/mcp-catalog.js";
+import { nativePreset, parseEnvSecret, azureNamespaces, ownSecret, azmcpPackage } from "../../shared/mcp-catalog.js";
 import { googleAccessToken, parseServiceAccount } from "./google-token.js";
 import { resolveRunner } from "./runner.js";
 import {
@@ -484,7 +484,9 @@ export class McpRegistry {
           "exec",
           "--yes",
           "--package",
-          preset.package,
+          p.preset === "azure" || p.preset === "adx"
+            ? azmcpPackage(p.resourceContext.azmcpVersion)
+            : preset.package,
           "--",
           preset.bin,
           "server",

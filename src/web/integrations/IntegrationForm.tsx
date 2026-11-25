@@ -1,6 +1,7 @@
+import { TesseractLoader } from "../flow/TesseractLoader.js";
 import { useState } from "react";
 import { ExternalLink, Save, Trash2 } from "lucide-react";
-import { azureNamespaces, nativePreset, nativePresets } from "../../shared/mcp-catalog.js";
+import { azmcpVersions, azureNamespaces, nativePreset, nativePresets } from "../../shared/mcp-catalog.js";
 import { manageRequest } from "../api.js";
 import { ArmScopePicker } from "../components/ArmScopePicker.js";
 import { McpDetails } from "../components/McpDetails.js";
@@ -295,6 +296,7 @@ export function IntegrationForm({
         <fieldset className="if-card">
           <legend>3 · Escopo</legend>
           {form.preset === "azure" && form.transport === "stdio" && (
+            <>
             <label>
               Grupo de tools
               <select aria-label="Grupo de tools a carregar" value={context.namespace || "pricing"} onChange={(e) => setCtx("namespace", e.target.value)}>
@@ -311,6 +313,18 @@ export function IntegrationForm({
                 ))}
               </select>
             </label>
+            <label>
+              Versão do Azure MCP Server
+              <select aria-label="Versão do Azure MCP Server" value={context.azmcpVersion || "3.0.0"} onChange={(e) => setCtx("azmcpVersion", e.target.value)}>
+                {azmcpVersions.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.label}
+                  </option>
+                ))}
+              </select>
+              <small className="if-fine">{azmcpVersions.find((v) => v.id === (context.azmcpVersion || "3.0.0"))?.note} Trocar a versão exige reaprovar as tools.</small>
+            </label>
+            </>
           )}
           {form.preset === "azure" && context.namespace === "advisor" && (
             <label>
@@ -355,7 +369,7 @@ export function IntegrationForm({
       )}
       <div className="if-actions">
         <button className="lx-btn lx-btn--primary" disabled={busy}>
-          <Save size={15} aria-hidden="true" /> {busy ? "Salvando…" : editing ? "Salvar alterações" : "Criar integração"}
+          {!busy && <Save size={15} aria-hidden="true" />} {busy ? <><TesseractLoader size={18} /> Salvando…</> : editing ? "Salvar alterações" : "Criar integração"}
         </button>
         {onCancel && (
           <button type="button" className="lx-btn" onClick={onCancel}>
