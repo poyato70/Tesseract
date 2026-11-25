@@ -109,9 +109,8 @@ function Invoke-UnauthenticatedHead {
         $proxy.Credentials = $null
         $request.Proxy = $proxy
     } else {
-        $systemProxy = [System.Net.WebRequest]::DefaultWebProxy
-        if ($systemProxy -and -not $systemProxy.IsBypassed($Uri)) {
-            $systemProxyUri = $systemProxy.GetProxy($Uri)
+        $systemProxyUri = Get-PreflightSystemProxyUri -Uri $Uri
+        if ($systemProxyUri) {
             $proxy = [System.Net.WebProxy]::new($systemProxyUri)
             $proxy.Credentials = $null
             $request.Proxy = $proxy
@@ -142,22 +141,12 @@ function Test-Endpoint {
     try {
         $uri = [Uri]$RawUri
         if (-not $uri.IsAbsoluteUri -or $uri.Scheme -notin @('http', 'https')) { throw 'invalid endpoint' }
-        $proxyUri = Get-ExplicitProxyUri
-        $usingProxy = $proxyUri -and -not (Test-NoProxyMatch $uri.DnsSafeHost)
-        $dnsTarget = if ($usingProxy) { $proxyUri.DnsSafeHost } else {
-            $systemProxy = [System.Net.WebRequest]::DefaultWebProxy
-            if ($systemProxy -and -not $systemProxy.IsBypassed($uri)) { $systemProxy.GetProxy($uri).DnsSafeHost }
-            else { $uri.DnsSafeHost }
-        }
-        $dns = Resolve-DnsName -Name $dnsTarget -Type A -DnsOnly -QuickTimeout -ErrorAction Stop
-        if (-not $dns) { throw [System.Net.WebException]::new('DNS', [System.Net.WebExceptionStatus]::NameResolutionFailure) }
         $network = Invoke-UnauthenticatedHead -Uri $uri -TimeoutSeconds $TimeoutSeconds
         $state = Get-PreflightCheckState -Category $Category -NetworkState $network.State
         Add-PreflightCheck -Category $Category -Name $Label -State $state -Summary $network.Summary
         if ($uri.Scheme -ne 'https') { Add-PreflightCheck -Category $Category -Name "$Label TLS" -State 'AVISO' -Summary 'Endpoint configurado usa HTTP; nenhuma configuração foi alterada.' }
     } catch {
         $kind = Get-PreflightFailureKind -Exception $_.Exception
-        if ($kind -eq 'unknown') { $kind = 'dns' }
         $network = New-PreflightNetworkResult -FailureKind $kind
         $state = Get-PreflightCheckState -Category $Category -NetworkState $network.State
         Add-PreflightCheck -Category $Category -Name $Label -State $state -Summary $network.Summary
@@ -171,7 +160,7 @@ if (-not [Environment]::Is64BitOperatingSystem) { Add-PreflightCheck 'Sistema' '
 else { Add-PreflightCheck 'Sistema' 'Arquitetura' 'APROVADO' "Processo $env:PROCESSOR_ARCHITECTURE em Windows 64 bits." }
 
 $nodeCommand = Get-Command node.exe -ErrorAction SilentlyContinue
-if (-not $nodeCommand) { Add-PreflightCheck 'Ferramentas' 'Node.js' 'BLOQUEADO' 'Node.js 24 LTS não está no PATH.' }
+if (-not $nodeCommand) { Add-PreflightCheck 'Ferramentas' 'Node.js' 'BLOQUEADO' 'Node.js não está no PATH. Instale Node.js 24 LTS (24.6+) ou 22 LTS (22.21+) pelo procedimento corporativo e reabra o terminal.' }
 else {
     $nodeVersionText = ''
     try { $nodeVersionText = (& $nodeCommand.Source --version 2>$null).Trim() } catch { }
@@ -186,7 +175,10 @@ else {
         & $nodeCommand.Source --use-env-proxy -e 'process.exit(0)' 2>$null
         if ($LASTEXITCODE -eq 0) { Add-PreflightCheck 'Rede' 'Proxy do Node.js' 'APROVADO' 'Node.js reconhece HTTP_PROXY, HTTPS_PROXY e NO_PROXY; o serviço repassa essas variáveis sem imprimi-las. Clientes com transporte próprio ainda requerem validação individual.' }
         else { Add-PreflightCheck 'Rede' 'Proxy do Node.js' 'BLOQUEADO' 'Node.js não reconheceu o suporte oficial a proxy deste pacote.' }
-    } else { Add-PreflightCheck 'Ferramentas' 'Node.js' 'BLOQUEADO' 'Requer Node.js 24.6.x ou superior na linha 24, ou Node.js 22.21.x ou superior na linha 22.' }
+    } else {
+        $detectedVersion = if ($nodeMatch.Success) { $nodeMatch.Value } else { 'não identificada' }
+        Add-PreflightCheck 'Ferramentas' 'Node.js' 'BLOQUEADO' "Versão detectada: $detectedVersion. Requer Node.js 24.6.x ou superior na linha 24, ou 22.21.x ou superior na linha 22. Selecione a versão corporativa aprovada e reabra o terminal; versões de outras linhas não atendem ao package.json."
+    }
 }
 
 $npmCommand = Get-Command npm.cmd -ErrorAction SilentlyContinue
@@ -212,7 +204,7 @@ else {
     try { $registryUri = [Uri]$registry } catch { }
     if ($registryUri -and $registryUri.IsAbsoluteUri) {
         Add-PreflightCheck 'Rede' 'Registry npm configurado' 'INFORMATIVO' "Scheme $($registryUri.Scheme); host oculto no relatório."
-        $registryProbe = [UriBuilder]::new($registryUri); $registryProbe.UserName = ''; $registryProbe.Password = ''; $registryProbe.Path = '/'; $registryProbe.Query = ''; $registryProbe.Fragment = ''
+        $registryProbe = [UriBuilder]::new($registryUri); $registryProbe.UserName = ''; $registryProbe.Password = ''; $registryProbe.Query = ''; $registryProbe.Fragment = ''
         Test-Endpoint -Label 'Registry npm' -RawUri $registryProbe.Uri.AbsoluteUri -TimeoutSeconds $NetworkTimeoutSeconds
     } else { Add-PreflightCheck 'Rede' 'Registry npm configurado' 'BLOQUEADO' 'Não foi possível interpretar o registry configurado. O valor foi ocultado.' }
 

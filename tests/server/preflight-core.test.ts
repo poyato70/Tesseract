@@ -34,6 +34,48 @@ foreach ($status in @(401, 403, 407)) {
   $result = New-PreflightNetworkResult -StatusCode $status
   if ($result.State -ne 'AVISO') { throw ('HTTP ' + $status + ' misclassified') }
 }
+Add-Type -TypeDefinition @'
+using System;
+using System.Net;
+public class PreflightTestProxy : IWebProxy {
+    public ICredentials Credentials { get; set; }
+    public Uri Result { get; set; }
+    public bool Bypass { get; set; }
+    public Uri GetProxy(Uri destination) { return Result; }
+    public bool IsBypassed(Uri destination) { return Bypass; }
+}
+'@
+Set-StrictMode -Version Latest
+$endpoint = [Uri]'https://example.invalid/artifactory/api/npm/npm/'
+$proxy = [PreflightTestProxy]::new()
+if ($null -ne (Get-PreflightSystemProxyUri -Uri $endpoint -Proxy $proxy)) { throw 'null Windows proxy must use direct transport' }
+$proxy.Result = $endpoint
+if ($null -ne (Get-PreflightSystemProxyUri -Uri $endpoint -Proxy $proxy)) { throw 'destination URI must use direct transport' }
+$proxy.Result = [Uri]'http://proxy.invalid:8080'
+if ((Get-PreflightSystemProxyUri -Uri $endpoint -Proxy $proxy) -ne $proxy.Result) { throw 'configured system proxy was ignored' }
+$proxy.Bypass = $true
+if ($null -ne (Get-PreflightSystemProxyUri -Uri $endpoint -Proxy $proxy)) { throw 'system proxy bypass was ignored' }
+$preflightAst = [System.Management.Automation.Language.Parser]::ParseFile($env:TESSERACT_PREFLIGHT_SCRIPT, [ref]$null, [ref]$null)
+foreach ($name in @('Add-PreflightCheck', 'Test-Endpoint')) {
+    $definition = $preflightAst.Find({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name }, $false)
+    . ([scriptblock]::Create($definition.Extent.Text))
+}
+$checks = [System.Collections.Generic.List[object]]::new()
+function Invoke-UnauthenticatedHead {
+    param([Uri]$Uri, [int]$TimeoutSeconds)
+    if ($Uri.AbsolutePath -ne '/artifactory/api/npm/npm/') { throw 'registry path was lost' }
+    New-PreflightNetworkResult -StatusCode 200
+}
+Test-Endpoint -Label 'Registry npm' -RawUri $endpoint.AbsoluteUri -TimeoutSeconds 1
+if ($checks[0].State -ne 'APROVADO') { throw 'reachable endpoint blocked before HTTP probe' }
+function Invoke-UnauthenticatedHead { throw [System.InvalidOperationException]::new('secret-marker') }
+Test-Endpoint -Label 'Registry npm' -RawUri $endpoint.AbsoluteUri -TimeoutSeconds 1
+if ($checks[1].State -ne 'BLOQUEADO' -or $checks[1].Summary -match 'DNS') { throw 'unknown failure was mislabeled as DNS' }
+function Invoke-UnauthenticatedHead {
+    New-PreflightNetworkResult -FailureKind 'dns'
+}
+Test-Endpoint -Label 'Registry npm' -RawUri $endpoint.AbsoluteUri -TimeoutSeconds 1
+if ($checks[2].State -ne 'BLOQUEADO' -or $checks[2].Summary -notmatch 'DNS') { throw 'real DNS failure was not blocked' }
 $env:NODE_USE_ENV_PROXY = '0'
 __PROXY_SETUP__
 if ($env:NODE_USE_ENV_PROXY -ne '0') { throw 'explicit proxy opt-out was changed' }
@@ -54,6 +96,7 @@ if ((Get-PreflightCheckState -Category 'Rede' -NetworkState 'BLOQUEADO') -ne 'BL
     env: {
       ...process.env,
       TESSERACT_PREFLIGHT_MODULE: `${process.cwd()}\\scripts\\preflight-core.psm1`,
+      TESSERACT_PREFLIGHT_SCRIPT: `${process.cwd()}\\preflight.ps1`,
     },
   });
   expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);

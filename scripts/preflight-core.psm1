@@ -31,6 +31,18 @@ function Get-PreflightFailureKind {
     return 'unknown'
 }
 
+function Get-PreflightSystemProxyUri {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][Uri]$Uri,
+        [System.Net.IWebProxy]$Proxy = [System.Net.WebRequest]::DefaultWebProxy
+    )
+    if (-not $Proxy -or $Proxy.IsBypassed($Uri)) { return $null }
+    $proxyUri = $Proxy.GetProxy($Uri)
+    if (-not $proxyUri -or $proxyUri -eq $Uri) { return $null }
+    return $proxyUri
+}
+
 function New-PreflightNetworkResult {
     [CmdletBinding()]
     param(
@@ -61,4 +73,4 @@ function Get-PreflightCheckState {
     if ($Category -eq 'Rede opcional' -and $NetworkState -eq 'BLOQUEADO') { return 'AVISO' }
     return $NetworkState
 }
-Export-ModuleMember -Function Get-SafeEndpointLabel, Get-PreflightFailureKind, New-PreflightNetworkResult, Get-PreflightCheckState
+Export-ModuleMember -Function Get-SafeEndpointLabel, Get-PreflightFailureKind, Get-PreflightSystemProxyUri, New-PreflightNetworkResult, Get-PreflightCheckState

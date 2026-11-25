@@ -16,6 +16,8 @@
 
 A faixa de Node inclui suporte do runtime às variáveis de proxy padrão usado pelo serviço. Não use Node fora das versões LTS aprovadas pela empresa.
 
+Para preparar Node 24, mirror do Binários, `.npmrc`, login npm e MCPs na estação corporativa, consulte [o procedimento corporativo](docs/implantacao-outro-host.md#procedimento-corporativo-bb). O preflight informa a versão detectada, mas não instala Node nem altera o PATH.
+
 ### Clone, diagnóstico e instalação
 
 ```powershell
@@ -26,6 +28,8 @@ Set-Location Tesseract
 ```
 
 `preflight.ps1` verifica versões, execução básica de Node, políticas PowerShell, TLS, registry npm, conectividade sem autenticação, capacidade de escrita no checkout, espaço, porta e presença (sem leitura de conteúdo) do diretório de dados. O suporte de proxy do Node cobre clientes baseados no `fetch`/HTTP global. Os conectores HTTP/MCP usam transporte próprio com proteção SSRF e, desde a missão 22, também passam por `HTTPS_PROXY`/`HTTP_PROXY` (respeitando `NO_PROXY`; loopback e rede privada sempre direto; `TESSERACT_PROXY=off` desliga). Valide cada caminho na rede corporativa antes da implantação. O relatório sanitizado pode ser encaminhado à infraestrutura. O preflight comum faz requisições `HEAD` sem credenciais ao registry npm configurado, endpoints públicos de login/ARM Azure e MCP Registry opcional. Para diagnóstico local sem testar endpoints Azure: `.\preflight.ps1 -Port 4317 -SkipAzureEndpointChecks`. Isso não é um modo de instalação aprovado.
+
+A verificação usa o caminho completo do registry configurado e a resolução de nomes do próprio transporte HTTP. Proxy de sistema sem URI significa conexão direta; erros desconhecidos não são classificados como DNS. HTTP 401/403 indica alcance, não comprova login nem permissão para baixar pacotes.
 
 `install.ps1` executa o preflight, verifica se há serviço deste checkout ativo, instala exatamente o lockfile via `npm ci`, compila e confirma artefatos e carregamento do componente nativo. O instalador não instala servidores MCP, não solicita credenciais e não modifica proxy, TLS, ExecutionPolicy nem permissões. `-SkipAzureEndpointChecks` pode ser passado somente em avaliação isolada que exige ausência de requisições Azure, por exemplo `.\install.ps1 -Port 4317 -SkipAzureEndpointChecks`.
 

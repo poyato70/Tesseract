@@ -45,6 +45,123 @@ Não copie `node_modules`, `dist`, `.next` ou `out` de outro computador: `instal
 - Com CA corporativa, defina `NODE_EXTRA_CA_CERTS` (Node/npx) e `UV_NATIVE_TLS=1` ou `SSL_CERT_FILE` (uv) **antes** de `start.ps1`.
 - Conexões MCP HTTP, modelos e agentes usam `HTTPS_PROXY`/`HTTP_PROXY` por túnel CONNECT, respeitando `NO_PROXY`. Endereços loopback e de rede privada vão sempre direto. Atrás do proxy, a falha de DNS local é aceita (o proxy resolve), mas um nome que resolva para rede privada continua bloqueado. `TESSERACT_PROXY=off` desativa o proxy para essas chamadas.
 
+### Procedimento corporativo BB
+
+Consultado em 25/11/2026 na documentação TechBB: **Binários — JFrog Artifactory**, seções *Configurar o Registry*, *NVM for Windows sem proxy*, *npm login* e *Configurações no projeto*; **BB Digital PF — Configuração local**, seção *Comandos rápidos*. A orientação específica do Binários de configurar o mirror prevalece sobre a FAQ genérica que apenas relata falhas de NVM na rede.
+
+#### Node 24 LTS e PATH
+
+NVM for Windows gerencia versões de **Node**, não instala pacotes MCP. Use a instalação de Node/NVM aprovada pela equipe da estação. Se já há Node em `C:\Program Files\nodejs`, não substitua essa pasta nem o symlink do NVM por conta própria: isso pode afetar outros processos/usuários. Na estação investigada, NVM não foi encontrado no PATH e o Node ativo era `v26.13.0`, fora do `engines` do projeto.
+
+Com NVM for Windows já instalado e autorizado:
+
+```powershell
+nvm node_mirror https://binarios.intranet.bb.com.br/artifactory/generic-nodejsdist-remote
+nvm install 24.22.3
+nvm use 24.22.3
+node.exe --version
+npm.cmd --version
+Get-Command node.exe,npm.cmd,npx.cmd | Select-Object Name,Source
+```
+
+`24.22.3` foi a versão mais recente da linha 24 marcada LTS no `index.json` do mirror nesta consulta; confirme a versão aprovada antes de instalar. O mínimo aceito pelo Tesseract é 24.6.0 na linha 24. Node 26 não é substituto compatível só por ter número maior.
+
+Reabra o terminal/VS Code depois da instalação. Não é preciso modificar o PATH se `node.exe`, `npm.cmd` e `npx.cmd` já apontam para a instalação correta. Para uma distribuição ZIP corporativa já instalada e validada em pasta isolada, pode-se priorizar **somente a sessão atual**:
+
+```powershell
+$nodeDirectory = 'C:\CAMINHO\APROVADO\node-v24.22.3-win-x64'
+if (-not (Test-Path -LiteralPath (Join-Path $nodeDirectory 'node.exe'))) {
+    throw 'Informe a pasta da instalação corporativa do Node 24.'
+}
+$env:PATH = "$nodeDirectory;$env:PATH"
+node.exe --version
+npm.cmd --version
+```
+
+Execute preflight, instalação e início na mesma sessão para herdar esse PATH. O preflight não modifica PATH nem escolhe silenciosamente outro Node. O `node_mirror` é para downloads do Node pelo NVM; o registry do npm é outra configuração. A documentação consultada não exige `nvm npm_mirror` separado. Não use `nvm-sh` (POSIX) como se fosse NVM for Windows.
+
+#### Obter e salvar o `.npmrc`
+
+O template oficial fica em:
+
+```text
+https://binarios.intranet.bb.com.br:443/artifactory/generic-bb-binarios-aic-local/publico/alfred-templates/.npmrc
+```
+
+No PowerShell, com a confiança TLS corporativa já provisionada, baixe sem desativar a validação:
+
+```powershell
+$ErrorActionPreference = 'Stop'
+$target = Join-Path $env:USERPROFILE '.npmrc'
+$download = Join-Path $env:TEMP ("bb-npmrc-" + [guid]::NewGuid().ToString('N'))
+Invoke-WebRequest -Uri 'https://binarios.intranet.bb.com.br:443/artifactory/generic-bb-binarios-aic-local/publico/alfred-templates/.npmrc' -OutFile $download
+if (Test-Path -LiteralPath $target) {
+    Copy-Item -LiteralPath $target -Destination ($target + '.backup-' + [guid]::NewGuid().ToString('N'))
+}
+# Revise e integre configurações pessoais necessárias antes de substituir.
+Copy-Item -LiteralPath $download -Destination $target
+Remove-Item -LiteralPath $download
+npm.cmd config get registry
+```
+
+Não versione, imprima ou compartilhe `.npmrc` nem seu backup: podem conter tokens. Na estação investigada, o arquivo do usuário já configurava o registry correto, portanto **não foi sobrescrito**. Configuração de projeto e `npm_config_registry` podem prevalecer sobre o arquivo pessoal; consulte o registry efetivo dentro do checkout.
+
+A documentação tem exemplos CMD com `curl -k`; este procedimento usa a alternativa PowerShell documentada, mantendo TLS habilitado. Não desative `strict-ssl`, não use `NODE_TLS_REJECT_UNAUTHORIZED=0` e não instale certificados sem aprovação. O `NODE_EXTRA_CA_CERTS` existente apontava para um arquivo presente; nenhuma CA foi alterada. Não invente proxy: o guia do Binários informa que NVM não requer proxy em notebook corporativo/VDI, inclusive TRI.
+
+#### Login npm
+
+Após configurar o `.npmrc`, o guia orienta fazer login no Binários e executar interativamente:
+
+```powershell
+npm.cmd login --registry=https://binarios.intranet.bb.com.br/artifactory/api/npm/npm/
+```
+
+Mantenha a barra final e informe a chave em minúsculas no fluxo oficial. Depois de autenticar, o guia orienta remover a chave legada `_auth`, caso exista, preservando a configuração de autenticação criada pelo npm. Não forneça credenciais ao assistente. Uma sessão válida já existente não exige novo login a cada execução. O preflight não verifica autenticação; HTTP 200 sem credenciais não prova autorização para pacotes internos.
+
+#### MCPs: npm/npx, não NVM
+
+Os três pacotes são distribuídos pelo npm. `npx.cmd` executa o pacote (baixando-o se necessário) usando a configuração corporativa do npm. NVM serve apenas para selecionar o Node que executará npm/npx.
+
+Para inspecionar as versões disponíveis no registry antes de instalar:
+
+```powershell
+npm.cmd view @azure/mcp@latest version bin engines scripts --json
+npm.cmd view @microsoft/fabric-mcp@latest version bin engines scripts --json
+npm.cmd view kubernetes-mcp-server@latest version bin engines scripts --json
+```
+
+Na consulta de 25/11/2026: Azure `4.0.0-beta.10` (`azmcp`), Fabric `1.8.0` (`fabmcp`) e Kubernetes `0.1.3` (`kubernetes-mcp-server`). **`latest` não garante versão estável**: o Azure retornou beta. Azure e Fabric declaram `postinstall`; confirme aprovação dos scripts e dos downloads de binários nativos/espelhos com a infraestrutura. Metadados disponíveis no registry não comprovam que todos esses downloads são permitidos.
+
+Se houver aprovação explícita para uma instalação global no prefixo npm do usuário, a sintaxe é:
+
+```powershell
+npm.cmd install --global @azure/mcp@latest @microsoft/fabric-mcp@latest kubernetes-mcp-server@latest
+```
+
+Isso não é necessário para o Tesseract: seus conectores executam versões fixadas via npx, e uma instalação global de `latest` não muda essas versões. Para validar somente a CLI de uma versão aprovada, sem conectar ao Azure/Fabric/cluster:
+
+```powershell
+npx.cmd --yes --package=@azure/mcp@3.0.0 azmcp --help
+npx.cmd --yes --package=@microsoft/fabric-mcp@1.7.0 fabmcp --help
+npx.cmd --yes kubernetes-mcp-server@0.1.3 --help
+```
+
+Esses comandos ainda podem instalar pacotes e executar scripts; não foram executados nesta correção. Não troque as versões fixadas sem uma atualização aprovada. Resolva pacotes e downloads adicionais nos espelhos do Binários; não contorne bloqueios acessando registries públicos.
+
+#### Resultado da correção e próximo reteste
+
+O relatório original tinha dois bloqueios. A investigação confirmou Node `v26.13.0` incompatível e um falso diagnóstico DNS: o proxy do Windows retornava `null`, e o script acessava `DnsSafeHost` desse resultado. O preflight agora trata proxy sem URI como conexão direta, mantém o caminho do registry e classifica falhas a partir do transporte HTTP.
+
+O reteste de `.\preflight.ps1 -Port 4317 -ExportReport` aprovou o registry com HTTP 200 e manteve **um bloqueio real de versão do Node**, além de avisos dos endpoints opcionais ARM/MCP Registry. Regressões passaram em PowerShell 5.1 e 7. A instalação do Node ficou a cargo do usuário; nenhuma política, credencial, configuração npm ou PATH global foi alterada.
+
+Depois de instalar/selecionar Node 24 aprovado, no checkout e na sessão com o PATH correto:
+
+```powershell
+.\preflight.ps1 -Port 4317 -ExportReport
+```
+
+O sucesso exige ausência de `[BLOQUEADO]`; a exceção final continua intencional quando há requisito obrigatório não atendido. Não removê-la para fazer o diagnóstico aparentar sucesso.
+
 ## 4. Recriar credenciais e integrações
 
 Os segredos ficam em `%LOCALAPPDATA%\AzureCostLocal\config\vault`, protegidos por DPAPI do usuário Windows: **não são portáveis por cópia**. No host novo:
