@@ -1,16 +1,18 @@
 /**
  * Paleta de cores em comparação (missão 22, iteração 6).
- * "grafite" é o tema atual; "indigo" é o 60/30/10 Índigo Noturno · Pêssego Claro · Ciano Elétrico,
- * gerado em styles-palette-indigo.css e ativo por html[data-palette="indigo"].
+ * "indigo" (padrão) é o 60/30/10 Índigo Noturno · Pêssego Claro · Ciano Elétrico,
+ * gerado em styles-palette-indigo.css e ativo por html[data-palette="indigo"];
+ * "grafite" é o tema anterior, mantido como alternativa.
  */
 export type Palette = "grafite" | "indigo";
 const KEY = "tesseract-palette";
 
 export function readPalette(): Palette {
   try {
-    return globalThis.localStorage?.getItem(KEY) === "indigo" ? "indigo" : "grafite";
+    // Índigo é o padrão desde a iteração 7; Grafite fica disponível como alternativa.
+    return globalThis.localStorage?.getItem(KEY) === "grafite" ? "grafite" : "indigo";
   } catch {
-    return "grafite";
+    return "indigo";
   }
 }
 

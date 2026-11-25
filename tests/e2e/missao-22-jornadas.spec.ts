@@ -128,19 +128,22 @@ test("5 · tela estreita usa lista vertical", async ({ page }) => {
   await expect(page.locator(".op-canvas")).toBeHidden();
 });
 
-test("6 · paleta Índigo alterna sem trocar o tema atual e persiste", async ({ page }) => {
+test("6 · Índigo é o padrão e o Grafite continua disponível", async ({ page }) => {
   await page.goto(base + "/");
-  const toggle = page.locator(".tb-palette");
-  await expect(toggle).toHaveText(/Grafite/);
-  const bodyBg = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-  const grafite = await bodyBg();
-  await toggle.click();
-  await expect(page.locator("html")).toHaveAttribute("data-palette", "indigo");
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-  expect(await bodyBg()).not.toBe(grafite);
+  await page.evaluate(() => localStorage.removeItem("tesseract-palette"));
   await page.reload();
-  await expect(page.locator(".tb-palette")).toHaveText(/Índigo/);
-  await page.locator(".tb-palette").click();
+  const toggle = page.locator(".tb-palette");
+  await expect(toggle).toHaveText(/Índigo/);
+  await expect(page.locator("html")).toHaveAttribute("data-palette", "indigo");
+  const bodyBg = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  const indigo = await bodyBg();
+  await toggle.click();
   await expect(page.locator("html")).not.toHaveAttribute("data-palette", /.+/);
-  expect(await bodyBg()).toBe(grafite);
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  expect(await bodyBg()).not.toBe(indigo);
+  await page.reload();
+  await expect(page.locator(".tb-palette")).toHaveText(/Grafite/);
+  await page.locator(".tb-palette").click();
+  await expect(page.locator("html")).toHaveAttribute("data-palette", "indigo");
+  expect(await bodyBg()).toBe(indigo);
 });

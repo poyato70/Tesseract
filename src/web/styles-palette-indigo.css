@@ -4499,6 +4499,76 @@ html:where([data-palette="indigo"]),
 :where(html[data-palette="indigo"]) .i18n-hint {
   color: var(--lx-warn);
 }
+:where(html[data-palette="indigo"]) .if-ns {
+  border: 0;
+}
+:where(html[data-palette="indigo"]) .if-ns-group > strong {
+  color: var(--lx-faint);
+}
+:where(html[data-palette="indigo"]) .if-ns-item small {
+  color: var(--lx-faint);
+}
+:where(html[data-palette="indigo"]) .fr-tabs [role="tab"] {
+  background: unset;
+  border: unset;
+  color: unset;
+  box-shadow: unset;
+  outline: unset;
+  text-shadow: unset;
+  color: var(--lx-muted);
+  border: 1px solid var(--lx-line);
+}
+:where(html[data-palette="indigo"]) .fr-tabs [role="tab"][aria-selected="true"] {
+  color: var(--primary-text);
+  border-color: rgba(0, 210, 255, 0.45);
+  background: rgba(0, 210, 255, 0.08);
+}
+:where(html[data-palette="indigo"]) .fr-btn {
+  background: unset;
+  border: unset;
+  color: unset;
+  box-shadow: unset;
+  outline: unset;
+  text-shadow: unset;
+  color: var(--lx-text);
+  border: 1px solid var(--lx-line-strong);
+  background: var(--glass-bg);
+}
+:where(html[data-palette="indigo"]) .fr-btn:hover {
+  border-color: rgba(0, 210, 255, 0.45);
+}
+:where(html[data-palette="indigo"]) .fr-btn:focus-visible,
+:where(html[data-palette="indigo"]) .fr-tabs [role="tab"]:focus-visible {
+  outline: 2px solid var(--lx-cyan);
+}
+:where(html[data-palette="indigo"]) .fr-count {
+  color: var(--lx-muted);
+}
+:where(html[data-palette="indigo"]) .fr-scroll {
+  border: 1px solid var(--lx-line);
+}
+:where(html[data-palette="indigo"]) .fr-table th {
+  background: var(--lx-panel-2);
+}
+:where(html[data-palette="indigo"]) .fr-table th button {
+  background: unset;
+  border: unset;
+  color: unset;
+  box-shadow: unset;
+  outline: unset;
+  text-shadow: unset;
+  color: var(--lx-text);
+}
+:where(html[data-palette="indigo"]) .fr-table td {
+  border-top: 1px solid var(--lx-line);
+  color: var(--lx-text);
+}
+:where(html[data-palette="indigo"]) .fr-table tbody tr:hover td {
+  background: rgba(255, 255, 255, 0.03);
+}
+:where(html[data-palette="indigo"]) .fr-dl dt {
+  color: var(--lx-faint);
+}
 
 /* ---- tokens 60/30/10 ---- */
 html[data-palette="indigo"] {

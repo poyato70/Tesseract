@@ -167,3 +167,50 @@ Validação: Vitest 248 testes (239 aprovados, 8 ignorados, 1 falha intermitente
 
 - A tradução das respostas foi validada com fixture local que anuncia as descrições reais do azmcp 4.0.0-beta.10 e devolve dados simulados.
 - O formato real da resposta do catálogo pt-BR no Azure não foi observado: o extrator é tolerante a variações, mas isso precisa ser confirmado com uma credencial real.
+
+## Iteração 7 — vários grupos de tools Azure, visão amigável do resultado, Índigo padrão (25/11/2026)
+
+**Por que `azure-full` listava só `pricing_get`.** O preset Azure inicia o azmcp com um único `--namespace`, e o padrão é `pricing`. Medido com `tools/list` e `--read-only`, o namespace `pricing` anuncia 1 tool nas duas versões.
+
+Contagem medida por namespace (3.0.0 / 4.0.0-beta.10):
+
+| Namespace | Tools |
+|---|---|
+| advisor | 5 / 8 |
+| optimization | 3 / 3 |
+| quota | 2 / 2 |
+| subscription | 1 / 1 |
+| group | 2 / 2 |
+| monitor | 14 / 22 |
+| applicationinsights | 1 / 1 |
+| resourcehealth | 2 / 2 |
+| workbooks | 2 / 2 |
+| policy | 1 / 1 |
+| foundry | 0 / 0 |
+
+- Uma única execução com os 11 namespaces anunciou 34 tools na 3.0.0 e 45 na 4.0.0-beta.10, dentro do limite de 100.
+- A conexão Azure agora aceita vários grupos: `resourceContext.namespace` passa a ser uma lista separada por vírgula, com um `--namespace` por item na execução e na exportação para o Copilot.
+- O formulário mostra caixas de seleção com a contagem medida. Foundry fica desabilitado porque não tem tools de leitura.
+- O fluxo guiado do Advisor continua com `namespace=advisor`.
+
+**Resposta técnica.** Ganhou abas *Visão amigável* e *JSON*, com botão "Copiar resposta (JSON)".
+
+- A visão amigável localiza a maior lista de registros do retorno (ex.: `results.prices`) e a mostra em tabela com filtro, ordenação por coluna, "Copiar tabela" e download em CSV (`;` e vírgula decimal, para o Excel em pt-BR).
+- Retornos sem lista aparecem como campos simples.
+- Acima de 128 kB, o texto bruto é cortado e deixa de ser JSON válido. Nesse caso, quando há lista, o servidor envia junto uma tabela já interpretada, com prioridade no orçamento: 160 kB para a tabela e 40 kB para o texto bruto.
+- Em fixture com 900 preços no formato real de `pricing_get`, 338 registros ficaram disponíveis na tabela.
+
+**Paleta.** Índigo passa a ser o padrão (também no HTML inicial, sem piscar). Grafite continua disponível pelo mesmo botão.
+
+**Correção de layout.** A grade de `.tt-step` não tinha limite de coluna, e a tabela larga alargava a página para 2444 px. Agora a tabela rola dentro do cartão: a largura do documento medida voltou a 1440 px.
+
+**Validação:**
+
+| Verificação | Resultado |
+|---|---|
+| `tsc` | OK |
+| Vitest | 253 passaram, 8 ignorados (inclui `result-table` com o formato real de `pricing_get` e a exportação com vários namespaces) |
+| Build | OK |
+| Playwright m22, contra a pré-visualização Linux | 6/6 (a jornada 6 agora verifica Índigo como padrão) |
+
+**Não validado aqui:** a conexão `azure-full` real com vários namespaces e credencial Azure. A lista de tools por namespace foi medida sem credencial, só com `tools/list`.

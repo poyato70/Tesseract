@@ -318,18 +318,33 @@ export function azmcpPackage(version?: string) {
   return "@azure/mcp@" + (azmcpVersions.some((v) => v.id === version) ? version : "3.0.0");
 }
 
-/** Namespaces do azmcp liberados em modo somente leitura. */
-export const azureNamespaces: { id: string; label: string; group: string }[] = [
-  { id: "pricing", label: "Preços de catálogo", group: "FinOps" },
-  { id: "advisor", label: "Recomendações Advisor", group: "FinOps" },
-  { id: "optimization", label: "Otimização", group: "FinOps" },
-  { id: "quota", label: "Cotas e uso", group: "FinOps" },
-  { id: "subscription", label: "Inventário de assinaturas", group: "Inventário" },
-  { id: "group", label: "Resource groups", group: "Inventário" },
-  { id: "monitor", label: "Azure Monitor (logs e métricas)", group: "Observabilidade" },
-  { id: "applicationinsights", label: "Application Insights", group: "Observabilidade" },
-  { id: "resourcehealth", label: "Resource Health", group: "Observabilidade" },
-  { id: "workbooks", label: "Workbooks", group: "Observabilidade" },
-  { id: "policy", label: "Azure Policy", group: "Governança" },
-  { id: "foundry", label: "Foundry (modelos e deployments)", group: "IA e tokens" },
+/**
+ * Namespaces do azmcp liberados em modo somente leitura. `tools`: quantidade anunciada
+ * com --read-only, medida por tools/list (3.0.0 / 4.0.0-beta.10, 25/11/2026).
+ */
+export const azureNamespaces: { id: string; label: string; group: string; tools: [number, number] }[] = [
+  { id: "pricing", label: "Preços de catálogo", group: "FinOps", tools: [1, 1] },
+  { id: "advisor", label: "Recomendações Advisor", group: "FinOps", tools: [5, 8] },
+  { id: "optimization", label: "Otimização", group: "FinOps", tools: [3, 3] },
+  { id: "quota", label: "Cotas e uso", group: "FinOps", tools: [2, 2] },
+  { id: "subscription", label: "Inventário de assinaturas", group: "Inventário", tools: [1, 1] },
+  { id: "group", label: "Resource groups", group: "Inventário", tools: [2, 2] },
+  { id: "monitor", label: "Azure Monitor (logs e métricas)", group: "Observabilidade", tools: [14, 22] },
+  { id: "applicationinsights", label: "Application Insights", group: "Observabilidade", tools: [1, 1] },
+  { id: "resourcehealth", label: "Resource Health", group: "Observabilidade", tools: [2, 2] },
+  { id: "workbooks", label: "Workbooks", group: "Observabilidade", tools: [2, 2] },
+  { id: "policy", label: "Azure Policy", group: "Governança", tools: [1, 1] },
+  { id: "foundry", label: "Foundry (modelos e deployments)", group: "IA e tokens", tools: [0, 0] },
 ];
+
+/** Namespaces gravados em resourceContext.namespace (lista separada por vírgula). */
+export function parseNamespaces(value?: string): string[] {
+  const list = [...new Set((value || "pricing").split(",").map((x) => x.trim()).filter(Boolean))];
+  return list.length ? list : ["pricing"];
+}
+
+/** Ferramentas esperadas para uma seleção, pela medição acima (índice 0 = 3.0.0, 1 = 4.0 beta). */
+export function expectedAzureTools(namespaces: string[], version?: string) {
+  const i = version?.startsWith("4.") ? 1 : 0;
+  return namespaces.reduce((n, id) => n + (azureNamespaces.find((x) => x.id === id)?.tools[i] ?? 0), 0);
+}

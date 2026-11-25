@@ -88,6 +88,6 @@ export function describeMcp(p: {
     ]);
   }
   if (p.resourceContext?.namespace)
-    rows.push(["Grupo de tools", p.resourceContext.namespace]);
+    rows.push(["Grupo de tools", p.resourceContext.namespace.split(",").join(", ")]);
   return rows;
 }

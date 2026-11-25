@@ -30,7 +30,7 @@ import {
   httpAudience,
   independentMcp,
 } from "./presets.js";
-import { nativePreset, parseEnvSecret, azureNamespaces, ownSecret, azmcpPackage } from "../../shared/mcp-catalog.js";
+import { nativePreset, parseEnvSecret, azureNamespaces, ownSecret, azmcpPackage, parseNamespaces } from "../../shared/mcp-catalog.js";
 import { googleAccessToken, parseServiceAccount } from "./google-token.js";
 import { resolveRunner } from "./runner.js";
 import {
@@ -500,13 +500,14 @@ export class McpRegistry {
         if (p.preset !== "fabric") args.push("--read-only");
         if (p.preset === "adx") args.push("--namespace", "kusto");
         if (p.preset === "azure") {
-          const namespace = p.resourceContext.namespace || "pricing";
-          if (!azureNamespaces.some((x) => x.id === namespace))
-            throw new AppError(
-              "invalid_request",
-              "Namespace Azure não permitido.",
-            );
-          args.push("--namespace", namespace);
+          for (const namespace of parseNamespaces(p.resourceContext.namespace)) {
+            if (!azureNamespaces.some((x) => x.id === namespace))
+              throw new AppError(
+                "invalid_request",
+                "Namespace Azure não permitido.",
+              );
+            args.push("--namespace", namespace);
+          }
         }
         transport = new StdioClientTransport({
           command: process.execPath,

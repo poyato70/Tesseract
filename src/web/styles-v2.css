@@ -2612,3 +2612,63 @@ body {
 .i18n-original summary { cursor: pointer; color: var(--lx-faint); font-size: 11.5px; }
 .i18n-original [lang="en"], .i18n-original p { color: var(--lx-faint); }
 .i18n-hint { color: var(--lx-warn); font-size: 12.5px; }
+
+/* ---------- grupos de tools Azure (multi-namespace) ---------- */
+.if-ns { border: 0; padding: 0; margin: 0; display: grid; gap: 8px; }
+.if-ns legend { font-weight: 600; padding: 0; margin-bottom: 2px; }
+.if-ns-group { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 4px 12px; align-items: center; }
+.if-ns-group > strong { grid-column: 1 / -1; font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--lx-faint); margin-top: 4px; }
+.if-ns-item { display: flex !important; align-items: center; gap: 8px; font-size: 13px; }
+.if-ns-item small { margin-left: auto; color: var(--lx-faint); font-size: 11.5px; }
+.if-ns-item:has(input:disabled) { opacity: .5; }
+
+/* ---------- resposta técnica: visão amigável, JSON e copiar ---------- */
+.fr-details > summary { cursor: pointer; }
+.fr-tabs { display: flex; align-items: center; gap: 6px; margin: 8px 0; }
+.fr-tabs [role="tab"] {
+  all: unset; cursor: pointer; padding: 4px 12px; border-radius: 999px; font-size: 12.5px;
+  color: var(--lx-muted); border: 1px solid var(--lx-line);
+}
+.fr-tabs [role="tab"][aria-selected="true"] { color: var(--primary-text); border-color: rgba(34, 208, 226, 0.45); background: rgba(34, 208, 226, 0.08); }
+.fr-spacer { flex: 1; }
+.fr-btn {
+  all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 8px; font-size: 12px; color: var(--lx-text);
+  border: 1px solid var(--lx-line-strong); background: var(--glass-bg);
+}
+.fr-btn:hover { border-color: rgba(34, 208, 226, 0.45); }
+.fr-btn:focus-visible, .fr-tabs [role="tab"]:focus-visible { outline: 2px solid var(--lx-cyan); }
+.fr-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+.fr-count { font-size: 12.5px; color: var(--lx-muted); margin-right: auto; }
+.fr-filter { width: 200px; height: 28px; font-size: 12.5px; }
+.fr-scroll { overflow: auto; max-height: 460px; border: 1px solid var(--lx-line); border-radius: 10px; }
+.fr-table { border-collapse: collapse; width: max-content; min-width: 100%; font-size: 12.5px; }
+.fr-table th { position: sticky; top: 0; background: var(--lx-panel-2); z-index: 1; text-align: left; }
+.fr-table th button { all: unset; cursor: pointer; display: block; padding: 7px 10px; font-weight: 600; white-space: nowrap; color: var(--lx-text); }
+.fr-table td { padding: 5px 10px; border-top: 1px solid var(--lx-line); white-space: nowrap; color: var(--lx-text); }
+.fr-table td.is-num { text-align: right; font-variant-numeric: tabular-nums; }
+.fr-table tbody tr:hover td { background: rgba(255, 255, 255, 0.03); }
+.fr-more { margin-top: 8px; }
+.fr-dl { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 6px 16px; margin: 0; }
+.fr-dl dt { font-size: 11.5px; color: var(--lx-faint); }
+.fr-dl dd { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
+/* contenção: tabela larga rola dentro do cartão, não empurra a página */
+section[aria-label="Resultado da tool"],
+.fr-details,
+.fr,
+.fr-scroll { min-width: 0; max-width: 100%; }
+.tt, .tt > *, .tt-step, .idt-main, .idt-main > * { min-width: 0; }
+.fr-scroll { width: 100%; }
+/* itens de grupo: checkbox, rótulo e contagem na mesma linha */
+.if-ns-item {
+  display: grid !important;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  justify-items: start;
+  text-align: left;
+  gap: 8px;
+}
+.if-ns-item input[type="checkbox"] { width: auto !important; height: auto !important; margin: 0; }
+.if-ns-item small { justify-self: end; }
+.tt-step { grid-template-columns: minmax(0, 1fr); }
+.tt-result { min-width: 0; }

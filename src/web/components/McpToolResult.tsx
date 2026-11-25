@@ -1,6 +1,7 @@
 import { mcpPresentation } from "../../shared/mcp-presentation.js";
 import { advisorSuggestionPt, advisorToolLabel } from "./advisor-labels.js";
 import { localizedSuggestion } from "../../shared/advisor-i18n.js";
+import { TechnicalResponse } from "./FriendlyResult.js";
 
 const categories: Record<string, string> = {
   HighAvailability: "Alta disponibilidade",
@@ -139,18 +140,12 @@ export function McpToolResult({
         <p>{plain.slice(0, 600)}</p>
       ) : (
         <p>
-          O servidor retornou dados. Abra a resposta técnica para consultar os
-          detalhes.
+          {response?.partial === true && response?.table?.total
+            ? `O servidor retornou ${response.table.total.toLocaleString("pt-BR")} registros. Abra a resposta técnica para ver a tabela.`
+            : "O servidor retornou dados. Abra a resposta técnica para consultar os detalhes."}
         </p>
       )}
-      <details>
-        <summary>
-          {response?.partial === true
-            ? "Ver resposta técnica disponível"
-            : "Ver resposta técnica completa"}
-        </summary>
-        <pre>{JSON.stringify(result.response, null, 2)}</pre>
-      </details>
+      <TechnicalResponse key={result.response?.requestId} response={result.response} partial={response?.partial === true} />
     </section>
   );
 }

@@ -1,7 +1,7 @@
 import { TesseractLoader } from "../flow/TesseractLoader.js";
 import { useState } from "react";
 import { ExternalLink, Save, Trash2 } from "lucide-react";
-import { azmcpVersions, azureNamespaces, nativePreset, nativePresets } from "../../shared/mcp-catalog.js";
+import { azmcpVersions, azureNamespaces, expectedAzureTools, nativePreset, nativePresets, parseNamespaces } from "../../shared/mcp-catalog.js";
 import { manageRequest } from "../api.js";
 import { ArmScopePicker } from "../components/ArmScopePicker.js";
 import { McpDetails } from "../components/McpDetails.js";
@@ -297,22 +297,39 @@ export function IntegrationForm({
           <legend>3 · Escopo</legend>
           {form.preset === "azure" && form.transport === "stdio" && (
             <>
-            <label>
-              Grupo de tools
-              <select aria-label="Grupo de tools a carregar" value={context.namespace || "pricing"} onChange={(e) => setCtx("namespace", e.target.value)}>
-                {[...new Set(azureNamespaces.map((n) => n.group))].map((g) => (
-                  <optgroup key={g} label={g}>
-                    {azureNamespaces
-                      .filter((n) => n.group === g)
-                      .map((n) => (
-                        <option key={n.id} value={n.id}>
-                          {n.label} ({n.id})
-                        </option>
-                      ))}
-                  </optgroup>
-                ))}
-              </select>
-            </label>
+            <fieldset className="if-ns" aria-label="Grupos de tools a carregar">
+              <legend>Grupos de tools</legend>
+              <small className="if-fine">
+                Cada grupo é um namespace do Azure MCP Server. Marque quantos precisar; todos sobem na mesma conexão (limite de 100 tools).
+                Selecionadas: {expectedAzureTools(parseNamespaces(context.namespace), context.azmcpVersion)} tools em modo somente leitura.
+              </small>
+              {[...new Set(azureNamespaces.map((n) => n.group))].map((g) => (
+                <div key={g} className="if-ns-group">
+                  <strong>{g}</strong>
+                  {azureNamespaces
+                    .filter((n) => n.group === g)
+                    .map((n) => {
+                      const selected = parseNamespaces(context.namespace);
+                      const count = n.tools[(context.azmcpVersion || "").startsWith("4.") ? 1 : 0];
+                      return (
+                        <label key={n.id} className="if-ns-item" title={count === 0 ? "Nenhuma tool anunciada em modo somente leitura (medido)." : undefined}>
+                          <input
+                            type="checkbox"
+                            disabled={count === 0}
+                            checked={selected.includes(n.id)}
+                            onChange={(e) => {
+                              const next = e.target.checked ? [...selected, n.id] : selected.filter((x) => x !== n.id);
+                              setCtx("namespace", (next.length ? next : ["pricing"]).join(","));
+                            }}
+                          />
+                          <span>{n.label}</span>
+                          <small>{count === 0 ? "sem tools de leitura" : `${count} ${count === 1 ? "tool" : "tools"}`}</small>
+                        </label>
+                      );
+                    })}
+                </div>
+              ))}
+            </fieldset>
             <label>
               Versão do Azure MCP Server
               <select aria-label="Versão do Azure MCP Server" value={context.azmcpVersion || "3.0.0"} onChange={(e) => setCtx("azmcpVersion", e.target.value)}>
@@ -326,7 +343,7 @@ export function IntegrationForm({
             </label>
             </>
           )}
-          {form.preset === "azure" && context.namespace === "advisor" && (
+          {form.preset === "azure" && parseNamespaces(context.namespace).includes("advisor") && (
             <label>
               ID da assinatura
               <input value={context.subscription || ""} onChange={(e) => setCtx("subscription", e.target.value.trim())} pattern="[0-9a-fA-F-]{36}" placeholder="00000000-0000-0000-0000-000000000000" />
