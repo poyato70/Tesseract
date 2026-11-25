@@ -8,6 +8,7 @@ import "./styles-neumorphic.css";
 import "../../app/theme.css";
 import "./styles-rebuild.css";
 import "./styles-v2.css";
+import "./styles-palette-indigo.css";
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     {window.location.pathname === "/auth/complete" ? (

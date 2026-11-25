@@ -3,6 +3,7 @@ import { TesseractLoader } from "../flow/TesseractLoader.js";
 import { useMemo, useState, type FormEvent } from "react";
 import { CheckCircle2, CircleDashed, Play, PlugZap, Search, ShieldCheck, Unplug } from "lucide-react";
 import { manageRequest } from "../api.js";
+import { preferredLanguage } from "../../shared/tool-i18n.js";
 import { SchemaInputs, schemaDefaults, resolveSchema } from "../components/SchemaInputs.js";
 import { McpToolResult } from "../components/McpToolResult.js";
 import { applyPricingDefaults } from "../components/pricing-defaults.js";
@@ -35,6 +36,13 @@ export function AnnotationBadges({ annotations }: { annotations?: Record<string,
 
 export function defaultArguments(profile: IntegrationProfile, tool?: ListedTool) {
   if (!tool) return {};
+  const base = defaultArgumentsBase(profile, tool);
+  // Catálogos que aceitam pt-BR já vêm pedindo português; o campo fica visível e editável.
+  const language = preferredLanguage((tool.inputSchema as any)?.properties?.language);
+  return language && base.language === undefined ? { ...base, language } : base;
+}
+
+function defaultArgumentsBase(profile: IntegrationProfile, tool: ListedTool): Record<string, unknown> {
   if (isAdvisorProfile(profile)) {
     const args = advisorListArguments(tool as any, profile.resourceContext?.subscription || "");
     if (args) return args as Record<string, unknown>;
@@ -345,7 +353,7 @@ export function ToolTester({
             <>
               {!advanced && resolveSchema(selected.inputSchema, selected.inputSchema)?.properties && (
                 <div className="tt-schema">
-                  <SchemaInputs key={selected.name} schema={selected.inputSchema} value={args} onChange={(v) => {
+                  <SchemaInputs key={selected.name} toolName={selected.name} schema={selected.inputSchema} value={args} onChange={(v) => {
                     setArgs(v);
                     setJson(JSON.stringify(v, null, 2));
                   }} />

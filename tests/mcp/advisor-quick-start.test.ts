@@ -132,3 +132,41 @@ it("requires an explicit subscription and declines an incompatible schema", () =
     ),
   ).toBeUndefined();
 });
+
+it("traduz recomendações pelo catálogo pt-BR só quando a leitura do catálogo está aprovada", async () => {
+  const { registry, snapshot } = fixture();
+  const { id } = await registry.prepareAdvisor(accessId, subscription);
+  const typeId = "3c510b6b-1d30-4f15-9d1b-1d4c7c4f5e2a";
+  const listTool = descriptor({ name, inputSchema, annotations: { readOnlyHint: true, destructiveHint: false } });
+  const catalogSchema = { type: "object", properties: { subscription: { type: "string" }, language: { type: "string" } } };
+  const catalogTool = descriptor({ name: "advisor_metadata_list", inputSchema: catalogSchema, annotations: { readOnlyHint: true, destructiveHint: false } });
+  const recs = { results: { recommendations: [{ properties: { recommendationTypeId: typeId, shortDescription: { solution: "Upgrade to a newer SKU" } } }] } };
+  const catalog = { results: [{ properties: { recommendationTypeId: typeId, shortDescription: { solution: "Atualize para um SKU mais recente" } } }] };
+  const callTool = vi.fn(async ({ name: called, arguments: a }: any) => ({
+    content: [{ type: "text", text: JSON.stringify(called === name ? recs : (expect(a.language).toBe("pt-BR"), catalog)) }],
+  }));
+  const controller = new AbortController();
+  vi.spyOn(registry, "connect").mockImplementation(async () => ({
+    profile: await registry.get(id),
+    tools: [listTool, catalogTool],
+    controller,
+    client: {
+      callTool,
+      listTools: async () => ({ tools: [{ name, inputSchema, annotations: listTool.annotations }, { name: catalogTool.name, inputSchema: catalogSchema, annotations: catalogTool.annotations }] }),
+    },
+  }) as any);
+  const ctx = { requestId: "fixture", signal: new AbortController().signal } as any;
+  snapshot.mcpProfiles[0].approvedTools.push({ name, schemaHash: listTool.schemaHash });
+
+  const without: any = await registry.call(ctx, id, name, { subscription }, undefined, true);
+  expect(without.localized).toBeUndefined();
+  expect(without.localizationHint).toMatch(/advisor_metadata_list/);
+  expect(callTool).toHaveBeenCalledTimes(1);
+
+  snapshot.mcpProfiles[0].approvedTools.push({ name: catalogTool.name, schemaHash: catalogTool.schemaHash });
+  const withCatalog: any = await registry.call(ctx, id, name, { subscription }, undefined, true);
+  expect(withCatalog.localized.types[typeId].solution).toBe("Atualize para um SKU mais recente");
+  // segunda chamada usa o catálogo em cache
+  await registry.call(ctx, id, name, { subscription }, undefined, true);
+  expect(callTool).toHaveBeenCalledTimes(4);
+});

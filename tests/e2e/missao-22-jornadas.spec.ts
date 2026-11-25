@@ -127,3 +127,20 @@ test("5 · tela estreita usa lista vertical", async ({ page }) => {
   await expect(page.locator(".op-lane").filter({ hasText: "Servidor E2E" }).first()).toBeVisible();
   await expect(page.locator(".op-canvas")).toBeHidden();
 });
+
+test("6 · paleta Índigo alterna sem trocar o tema atual e persiste", async ({ page }) => {
+  await page.goto(base + "/");
+  const toggle = page.locator(".tb-palette");
+  await expect(toggle).toHaveText(/Grafite/);
+  const bodyBg = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  const grafite = await bodyBg();
+  await toggle.click();
+  await expect(page.locator("html")).toHaveAttribute("data-palette", "indigo");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  expect(await bodyBg()).not.toBe(grafite);
+  await page.reload();
+  await expect(page.locator(".tb-palette")).toHaveText(/Índigo/);
+  await page.locator(".tb-palette").click();
+  await expect(page.locator("html")).not.toHaveAttribute("data-palette", /.+/);
+  expect(await bodyBg()).toBe(grafite);
+});

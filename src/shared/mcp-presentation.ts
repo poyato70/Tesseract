@@ -9,6 +9,7 @@ export type McpPresentation = {
     language?: string;
     code?: string;
     link?: string;
+    typeId?: string;
   }[];
 };
 
@@ -36,6 +37,7 @@ export function mcpPresentation(response: any): McpPresentation | undefined {
         language: boundedText(item?.language, 60),
         code: boundedText(item?.code, 550),
         link: boundedText(item?.link, 400),
+        typeId: boundedText(item?.typeId, 40),
       })),
     };
   }
@@ -64,6 +66,7 @@ export function mcpPresentation(response: any): McpPresentation | undefined {
               properties?.shortDescription?.solution ?? properties?.label,
             ),
             link: boundedText(properties?.learnMoreLink, 400),
+            typeId: boundedText(properties?.recommendationTypeId, 40),
           };
         }),
       };

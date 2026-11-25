@@ -1,5 +1,6 @@
 import { mcpPresentation } from "../../shared/mcp-presentation.js";
 import { advisorSuggestionPt, advisorToolLabel } from "./advisor-labels.js";
+import { localizedSuggestion } from "../../shared/advisor-i18n.js";
 
 const categories: Record<string, string> = {
   HighAvailability: "Alta disponibilidade",
@@ -79,8 +80,11 @@ export function McpToolResult({
       {summary?.kind === "advisor" ? (
         <>
           <p>Recomendações recebidas: {summary.count}. Exibindo até cinco.</p>
+          {result.response?.localizationHint && <p className="i18n-hint">{result.response.localizationHint}</p>}
           {summary.items.map((item, index) => {
-            const portuguese = advisorSuggestionPt(item.description);
+            const portuguese =
+              localizedSuggestion(result.response?.localized?.types, item.typeId) ??
+              advisorSuggestionPt(item.description);
             return (
               <article className="config-card" key={index}>
                 <strong>{item.title ?? "Recurso não informado"}</strong>
@@ -92,6 +96,7 @@ export function McpToolResult({
                 {item.description &&
                   (portuguese ? (
                     <>
+                      {result.response?.localized && <small>Catálogo pt-BR do Azure Advisor</small>}
                       <p>{portuguese}</p>
                       <details>
                         <summary>Texto original do Azure</summary>

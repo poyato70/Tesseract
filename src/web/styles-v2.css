@@ -2583,3 +2583,32 @@ body {
   background: linear-gradient(180deg, #35dff0, #16b8cc) !important;
   color: #04262b !important;
 }
+
+/* ---------- alternância de paleta (iteração 6) ---------- */
+.tb-palette {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--lx-muted);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-line);
+}
+.tb-palette:hover { color: var(--lx-text); }
+.tb-palette[aria-pressed="true"] {
+  color: var(--primary-text);
+  border-color: rgba(34, 208, 226, 0.45);
+}
+.tb-palette:focus-visible { outline: 2px solid var(--lx-cyan); }
+
+/* ---------- textos traduzidos com original recolhido (iteração 6) ---------- */
+.schema-desc { display: block; }
+.i18n-original { margin-top: 4px; }
+.i18n-original summary { cursor: pointer; color: var(--lx-faint); font-size: 11.5px; }
+.i18n-original [lang="en"], .i18n-original p { color: var(--lx-faint); }
+.i18n-hint { color: var(--lx-warn); font-size: 12.5px; }

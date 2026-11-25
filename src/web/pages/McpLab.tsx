@@ -1,3 +1,4 @@
+import { toolDescriptionPt } from "../../shared/tool-i18n.js";
 import { TesseractLoader } from "../flow/TesseractLoader.js";
 import { useEffect, useRef, useState } from "react";
 import { manageRequest } from "../api.js";
@@ -408,7 +409,7 @@ export function McpLab({
                   {group === "tools" && (
                     <details open={!compact}>
                       <summary>Detalhes técnicos da ferramenta</summary>
-                      {compact && <><p><code>{selected.name}</code></p>{selected.description && <p lang="en">{selected.description}</p>}</>}
+                      {compact && <><p><code>{selected.name}</code></p>{toolDescriptionPt(selected.name) ? <><p>{toolDescriptionPt(selected.name)}</p>{selected.description && <details className="i18n-original"><summary>Texto original do servidor (inglês)</summary><p lang="en">{selected.description}</p></details>}</> : selected.description && <p lang="en">{selected.description}</p>}</>}
                       <h4>Input Schema</h4>
                       <p className="ux03-note">
                         Contrato de entrada anunciado pelo servidor. Não é um

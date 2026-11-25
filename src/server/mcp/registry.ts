@@ -1,4 +1,5 @@
 import { validArmScope } from "./arm-policy.js";
+import { advisorTypeTexts, recommendationTypeIds, toolPayloads, type AdvisorTypeText } from "../../shared/advisor-i18n.js";
 import { readCatalog } from "./catalog.js";
 import { sanitizeEvidence } from "../multicloud/sanitize.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -82,6 +83,8 @@ type Live = {
 export class McpRegistry {
   private live = new Map<string, Live>();
   private states = new Map<string, unknown>();
+  /** Catálogo pt-BR do Advisor por conexão (6 h): traduz as recomendações individuais. */
+  private advisorCatalog = new Map<string, { at: number; texts: Map<string, AdvisorTypeText> }>();
   constructor(
     private store: ConfigStore,
     private vault: SecretStore,
@@ -725,6 +728,58 @@ export class McpRegistry {
       approvedTools: tools,
     });
   }
+  /**
+   * Recomendações do Advisor chegam em inglês e a tool de listagem não aceita idioma.
+   * Se a conexão também aprovou advisor_metadata_list, consulta o catálogo em pt-BR
+   * (somente leitura, mesma política de aprovação e escopo) e devolve os textos por
+   * recommendationTypeId. Falhas aqui não afetam o resultado principal.
+   */
+  private async localizeAdvisor(
+    ctx: RequestContext,
+    live: Live,
+    current: McpProfile,
+    tools: ReturnType<typeof descriptor>[],
+    name: string,
+    args: Record<string, unknown>,
+    result: unknown,
+  ): Promise<{ localized?: { language: string; types: Record<string, AdvisorTypeText> }; localizationHint?: string }> {
+    if (!/(^|_)advisor_recommendation_list$/.test(name)) return {};
+    const ids = recommendationTypeIds(toolPayloads(result));
+    if (!ids.length) return {};
+    const catalogTool = tools.find((t) => /(^|_)advisor_metadata_list$/.test(t.name));
+    const approved = catalogTool && current.approvedTools.some((x) => x.name === catalogTool.name && x.schemaHash === catalogTool.schemaHash);
+    if (!catalogTool || !approved)
+      return { localizationHint: "Textos do Azure em inglês. Aprove a leitura advisor_metadata_list nesta integração para recebê-los em português (catálogo pt-BR do Advisor)." };
+    const key = current.id + ":" + catalogTool.schemaHash;
+    let cached = this.advisorCatalog.get(key);
+    if (!cached || Date.now() - cached.at > 6 * 3600_000) {
+      const props = ((catalogTool.inputSchema as any)?.properties || {}) as Record<string, unknown>;
+      const catalogArgs: Record<string, unknown> = { language: "pt-BR" };
+      for (const k of ["tenant", "subscription"]) if (k in props && typeof args[k] === "string") catalogArgs[k] = args[k];
+      try {
+        authorizeTool(current, catalogTool, catalogArgs);
+        const r = await live.client.callTool({ name: catalogTool.name, arguments: catalogArgs }, undefined, {
+          signal: AbortSignal.any([ctx.signal, live.controller.signal]),
+          timeout: 60000,
+        });
+        if ((r as any).isError) throw new Error("catálogo com erro");
+        cached = { at: Date.now(), texts: advisorTypeTexts(toolPayloads(r)) };
+        this.advisorCatalog.set(key, cached);
+        ctx.diagnose?.({ source: "MCP", operation: current.name + " / " + catalogTool.name, status: "sucesso", detail: `Catálogo pt-BR para traduzir recomendações: ${cached.texts.size} tipos.` });
+      } catch {
+        ctx.diagnose?.({ source: "MCP", operation: current.name + " / " + catalogTool.name, status: "aviso", detail: "Catálogo pt-BR indisponível; recomendações exibidas no texto original." });
+        return { localizationHint: "Não foi possível obter o catálogo pt-BR do Advisor agora; textos no original." };
+      }
+    }
+    const types: Record<string, AdvisorTypeText> = {};
+    for (const id of ids) {
+      const t = cached.texts.get(id);
+      if (t) types[id] = t;
+    }
+    return Object.keys(types).length
+      ? { localized: { language: "pt-BR", types } }
+      : { localizationHint: "O catálogo pt-BR do Advisor não trouxe tradução para estes tipos de recomendação." };
+  }
   async call(
     ctx: RequestContext,
     id: string,
@@ -853,7 +908,9 @@ export class McpRegistry {
         "tools/call retornou sem isError; resposta disponível no painel da execução. Isso valida esta chamada, não todas as capacidades Azure.",
     });
     this.states.set(id, "consulta validada");
+    const localization = await this.localizeAdvisor(ctx, live, current, latest.tools.map(descriptor), name, args, result);
     return {
+      ...localization,
       requestId: ctx.requestId,
       durationMs: Date.now() - callStarted,
       source: "mcp",

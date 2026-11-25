@@ -1,7 +1,8 @@
 import { subscribeActivity } from "../activity.js";
 import { TesseractLoader } from "../flow/TesseractLoader.js";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bell, ChevronRight, Search, ShieldCheck } from "lucide-react";
+import { Bell, ChevronRight, Palette as PaletteIcon, Search, ShieldCheck } from "lucide-react";
+import { applyPalette, readPalette, type Palette } from "./palette.js";
 import { pages } from "./routes.js";
 
 type Hit = { id: string; label: string; hint: string; go: () => void };
@@ -34,6 +35,12 @@ export function Topbar({
       else setBusy(0);
     });
   }, []);
+  const [palette, setPalette] = useState<Palette>(readPalette);
+  const togglePalette = () => {
+    const next: Palette = palette === "indigo" ? "grafite" : "indigo";
+    applyPalette(next);
+    setPalette(next);
+  };
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [cursor, setCursor] = useState(0);
@@ -141,6 +148,16 @@ export function Topbar({
             <ShieldCheck size={14} aria-hidden="true" /> Somente leitura
           </span>
         )}
+        <button
+          type="button"
+          className="tb-palette"
+          aria-pressed={palette === "indigo"}
+          onClick={togglePalette}
+          title="Alternar a paleta para comparar: Grafite (atual) ou Índigo 60/30/10 (Índigo Noturno, Pêssego Claro, Ciano Elétrico)"
+        >
+          <PaletteIcon size={14} aria-hidden="true" />
+          <span>{palette === "indigo" ? "Índigo" : "Grafite"}</span>
+        </button>
         <button type="button" className="tb-icon" aria-label={alerts ? `${alerts} falha(s) recentes — abrir Atividade` : "Atividade"} onClick={() => onNavigate("diagnostics")}>
           <Bell size={17} aria-hidden="true" />
           {alerts > 0 && <b>{alerts}</b>}

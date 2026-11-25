@@ -124,3 +124,46 @@ Mudanças:
 - Abertura: "Viemos em paz" quando os aliens chegam (≈3,2 s); link do rodapé renomeado.
 
 Validação: Vitest 248 testes (239 aprovados, 8 ignorados, 1 falha intermitente em `orchestration-store.test.ts` que passa isolada — 12/12); Playwright m22 5/5 no Chromium contra a pré-visualização. Não validado aqui: Advisor real com credencial Azure e chat com Copilot autenticado.
+
+## Iteração 6 — paleta Índigo alternável e textos do Advisor em português (25/11/2026)
+
+**Paleta alternativa (sem remover a atual).** Botão "Grafite / Índigo" na barra superior; a escolha fica em `localStorage` (`tesseract-palette`) e é aplicada antes do primeiro render. O tema Grafite continua sendo o padrão.
+
+- `src/web/styles-palette-indigo.css` é gerado por `scripts/gen-palette-indigo.py` (tinycss2) a partir das seis folhas na ordem de carga. Só declarações de cor são reemitidas, escopadas por `:where()` para manter a especificidade original e a cascata.
+- 60/30/10: Índigo Noturno `#1C1747` (fundos), Pêssego Claro `#FFD2B3` (títulos e textos), Ciano Elétrico `#00D2FF` (ações). As cores de estado (laranja executando, verde sucesso, vermelho falha, âmbar aviso) não mudam.
+- Contraste WCAG medido, sobre o fundo `#1C1747` / painel `#2A2263`:
+
+  | Uso | Cor | Contraste |
+  |---|---|---|
+  | Texto | `#FFF1E6` | 15,03 / 12,59 |
+  | Título | `#FFD2B3` | 11,97 / 10,03 |
+  | Texto secundário | `#D2B9B0` | 8,95 / 7,50 |
+  | Texto esmaecido | `#9B8EA8` | 5,41 / 4,53 |
+  | Destaque | `#00D2FF` | 9,23 / 7,74 |
+
+  O texto `#0D0A33` sobre o ciano mede 10,52.
+
+**Tools do Advisor em português.** `src/shared/tool-i18n.ts` traz a descrição de uso das 9 tools e de todos os parâmetros anunciados pelo azmcp 3.0.0 e 4.0.0-beta.10. A cobertura é verificada contra `tests/fixtures/azmcp-advisor-params.json`, extraído de `tools/list` real.
+
+- A interface mostra o texto em português e mantém o original do servidor recolhido.
+- `advisor_metadata_list` passa a vir com `language=pt-BR` preenchido e editável.
+
+**Respostas em português.** `advisor_recommendation_list` não aceita idioma, mas o catálogo (`advisor_metadata_list`) aceita `pt-BR`, e os dois compartilham `recommendationTypeId`.
+
+- Quando a conexão também aprovou o catálogo, o servidor consulta-o em pt-BR, com a mesma política de aprovação e escopo e cache de 6 h, e devolve `localized.types`.
+- A tela exibe o texto em português com o original recolhido.
+- Sem essa aprovação, a tela informa como habilitar.
+
+**Validação:**
+
+| Verificação | Resultado |
+|---|---|
+| `tsc` | OK |
+| Vitest | 247 passaram, 8 ignorados (inclui `advisor-i18n` e o fluxo do registry com e sem aprovação do catálogo) |
+| Build | OK |
+| Playwright m22, contra a pré-visualização Linux | 6/6, incluindo a jornada de alternância de paleta |
+
+**Limites desta validação:**
+
+- A tradução das respostas foi validada com fixture local que anuncia as descrições reais do azmcp 4.0.0-beta.10 e devolve dados simulados.
+- O formato real da resposta do catálogo pt-BR no Azure não foi observado: o extrator é tolerante a variações, mas isso precisa ser confirmado com uma credencial real.

@@ -1,0 +1,158 @@
+{
+ "4.0.0-beta.10": {
+  "advisor_insight_list": [
+   "insight-name",
+   "service-group",
+   "subscription",
+   "tenant",
+   "top"
+  ],
+  "advisor_metadata_get": [
+   "language",
+   "recommendation-type-id"
+  ],
+  "advisor_metadata_list": [
+   "category",
+   "continuation-token",
+   "impact",
+   "language",
+   "resource-type",
+   "retirement-date",
+   "sub-category",
+   "tracking-id"
+  ],
+  "advisor_recommendation_list": [
+   "category",
+   "continuation-token",
+   "impact",
+   "minimum-savings",
+   "prioritized",
+   "product-family",
+   "recommendation-type-ids",
+   "resource",
+   "resource-group",
+   "resource-types",
+   "retirement-date",
+   "search",
+   "service-group",
+   "show-prioritization-signals",
+   "status",
+   "sub-category",
+   "subscriptions",
+   "tenant",
+   "top",
+   "tracking-ids"
+  ],
+  "advisor_recommendation_prevalidate": [
+   "minimum-unused-days",
+   "recommendation-type-id",
+   "resource-group",
+   "resources",
+   "service-group",
+   "subscriptions",
+   "tenant",
+   "top"
+  ],
+  "advisor_recommendation_summary": [
+   "as-of",
+   "category",
+   "from",
+   "group-by",
+   "impact",
+   "minimum-savings",
+   "prioritized",
+   "product-family",
+   "recommendation-type-ids",
+   "resource",
+   "resource-group",
+   "resource-types",
+   "retirement-date",
+   "search",
+   "service-group",
+   "status",
+   "sub-category",
+   "subscriptions",
+   "tenant",
+   "to",
+   "top"
+  ],
+  "advisor_recommendation_update": [
+   "postponed-until-date-time",
+   "recommendation-dismiss-reason",
+   "recommendation-id",
+   "recommendation-ids",
+   "recommendation-status",
+   "service-group",
+   "subscription",
+   "tenant"
+  ],
+  "advisor_remediation_get": [
+   "recommendation-type-id"
+  ],
+  "advisor_servicegroupintelligence_get": [
+   "continuation-token",
+   "criticality",
+   "service-group",
+   "status",
+   "tenant",
+   "top"
+  ]
+ },
+ "3.0.0": {
+  "advisor_metadata_get": [
+   "language",
+   "recommendation-type-id"
+  ],
+  "advisor_metadata_list": [
+   "category",
+   "impact",
+   "language",
+   "resource-type",
+   "retirement-date",
+   "sub-category",
+   "tracking-id"
+  ],
+  "advisor_recommendation_list": [
+   "category",
+   "impact",
+   "recommendation-type-id",
+   "resource",
+   "resource-group",
+   "resource-type",
+   "retirement-date",
+   "search",
+   "status",
+   "sub-category",
+   "subscription",
+   "tenant",
+   "top",
+   "tracking-ids"
+  ],
+  "advisor_recommendation_summary": [
+   "category",
+   "group-by",
+   "impact",
+   "recommendation-type-id",
+   "resource",
+   "resource-group",
+   "resource-type",
+   "retirement-date",
+   "search",
+   "sub-category",
+   "subscription",
+   "tenant",
+   "top"
+  ],
+  "advisor_recommendation_update": [
+   "postponed-until-date-time",
+   "recommendation-dismiss-reason",
+   "recommendation-id",
+   "recommendation-status",
+   "subscription",
+   "tenant"
+  ],
+  "advisor_remediation_get": [
+   "recommendation-type-id"
+  ]
+ }
+}

@@ -1,3 +1,4 @@
+import { paramDescriptionPt } from "../../shared/tool-i18n.js";
 import { useState } from "react";
 const help: Record<string, string> = {
   sku: "SKU exata. Ex.: Standard_D4s_v5. Não há catálogo de SKUs carregado automaticamente.",
@@ -45,6 +46,22 @@ export function resolveSchema(raw: any, root: any) {
   const options = raw?.anyOf || raw?.oneOf;
   return options ? options.find((s: any) => s.type !== "null") || raw : raw;
 }
+/** Descrição do parâmetro: tradução quando conhecida, com o texto do servidor recolhido. */
+function FieldDescription({ pt, original }: { pt?: string; original?: string }) {
+  if (!pt) return <small>{original || "Parâmetro definido pelo schema desta tool."}</small>;
+  return (
+    <small className="schema-desc">
+      {pt}
+      {original && (
+        <details className="i18n-original">
+          <summary>Texto original do servidor (inglês)</summary>
+          <span lang="en">{original}</span>
+        </details>
+      )}
+    </small>
+  );
+}
+
 export function SchemaInputs({
   schema,
   value,
@@ -53,6 +70,7 @@ export function SchemaInputs({
   path = "",
   depth = 0,
   fallbackValues,
+  toolName,
 }: {
   schema: any;
   value: any;
@@ -61,6 +79,8 @@ export function SchemaInputs({
   path?: string;
   depth?: number;
   fallbackValues?: any;
+  /** Nome da tool: habilita a tradução das descrições conhecidas. */
+  toolName?: string;
 }) {
   const s = resolveSchema(schema, root);
   if (depth > 6) return <p>Schema profundo: use o JSON avançado.</p>;
@@ -101,6 +121,7 @@ export function SchemaInputs({
                 path={name}
                 depth={depth + 1}
                 fallbackValues={fallbackValues?.[key]}
+                toolName={toolName}
               />
             </fieldset>
           );
@@ -191,10 +212,10 @@ export function SchemaInputs({
                     : "Deixe em branco se não quiser informar."}
               {help[key] && <span className="field-help">{help[key]}</span>}
             </small>
-            <small>
-              {field.description ||
-                "Parâmetro definido pelo schema desta tool."}
-            </small>
+            <FieldDescription
+              pt={depth === 0 ? paramDescriptionPt(toolName, key) : undefined}
+              original={field.description}
+            />
           </label>
         );
       })}
