@@ -162,6 +162,8 @@ Depois de instalar/selecionar Node 24 aprovado, no checkout e na sessão com o P
 
 O sucesso exige ausência de `[BLOQUEADO]`; a exceção final continua intencional quando há requisito obrigatório não atendido. Não removê-la para fazer o diagnóstico aparentar sucesso.
 
+Se `nvm list` mostrar `No installations recognized`, instalar apenas o NVM não instalou Node: configure o mirror, instale a versão aprovada e selecione-a com `nvm use`. A presença da pasta `NVM_SYMLINK` no PATH sem `node.exe` nela não basta. No diagnóstico posterior desta estação, o mirror já estava correto, mas nenhuma versão era reconhecida pelo NVM. O preflight marca verificações dependentes de Node/npm indisponíveis como `INFORMATIVO` (não validadas), mantendo o bloqueio obrigatório de Node.
+
 ## 4. Recriar credenciais e integrações
 
 Os segredos ficam em `%LOCALAPPDATA%\AzureCostLocal\config\vault`, protegidos por DPAPI do usuário Windows: **não são portáveis por cópia**. No host novo:

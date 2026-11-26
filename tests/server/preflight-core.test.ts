@@ -56,10 +56,14 @@ if ((Get-PreflightSystemProxyUri -Uri $endpoint -Proxy $proxy) -ne $proxy.Result
 $proxy.Bypass = $true
 if ($null -ne (Get-PreflightSystemProxyUri -Uri $endpoint -Proxy $proxy)) { throw 'system proxy bypass was ignored' }
 $preflightAst = [System.Management.Automation.Language.Parser]::ParseFile($env:TESSERACT_PREFLIGHT_SCRIPT, [ref]$null, [ref]$null)
-foreach ($name in @('Add-PreflightCheck', 'Test-Endpoint')) {
+foreach ($name in @('Add-PreflightCheck', 'Test-Endpoint', 'Get-NpmValue', 'Get-NpmConfigArguments', 'Test-ConfiguredBoolean')) {
     $definition = $preflightAst.Find({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name }, $false)
     . ([scriptblock]::Create($definition.Extent.Text))
 }
+$defaultNpmArguments = @(Get-NpmConfigArguments)
+if (($defaultNpmArguments -join ' ') -ne 'config list --json') { throw 'default npm configuration arguments changed' }
+$outBbNpmArguments = @(Get-NpmConfigArguments -UseDefaultRegistry)
+if (($outBbNpmArguments -join ' ') -ne 'config list --json --registry=https://registry.npmjs.org/') { throw 'OutBB did not select the public npm registry' }
 $checks = [System.Collections.Generic.List[object]]::new()
 function Invoke-UnauthenticatedHead {
     param([Uri]$Uri, [int]$TimeoutSeconds)
@@ -76,6 +80,24 @@ function Invoke-UnauthenticatedHead {
 }
 Test-Endpoint -Label 'Registry npm' -RawUri $endpoint.AbsoluteUri -TimeoutSeconds 1
 if ($checks[2].State -ne 'BLOQUEADO' -or $checks[2].Summary -notmatch 'DNS') { throw 'real DNS failure was not blocked' }
+$preflightText = [System.IO.File]::ReadAllText($env:TESSERACT_PREFLIGHT_SCRIPT)
+$npmStart = $preflightText.IndexOf('$npmCommand = Get-Command')
+$npmEnd = $preflightText.IndexOf('$proxyConfigured =')
+if ($npmStart -lt 0 -or $npmEnd -le $npmStart) { throw 'npm checks not found' }
+$checks = [System.Collections.Generic.List[object]]::new()
+$nodeAvailable = $false
+$npmConfig = $null
+$env:NODE_TLS_REJECT_UNAUTHORIZED = ''
+. ([scriptblock]::Create($preflightText.Substring($npmStart, $npmEnd - $npmStart)))
+foreach ($name in @('npm', 'npx', 'Registry npm configurado', 'Validação npm')) {
+    $check = @($checks | Where-Object Name -eq $name)
+    if ($check.Count -ne 1 -or $check[0].State -ne 'INFORMATIVO') { throw ($name + ' incorrectly evaluated without Node') }
+}
+if (@($checks | Where-Object Name -eq 'Registry npm').Count -ne 0) { throw 'registry was probed without npm configuration' }
+if ((Get-NpmValue 'registry') -ne '') { throw 'unavailable npm configuration returned a value' }
+$npmConfig = [pscustomobject]@{ registry = 'https://example.invalid/'; 'strict-ssl' = $false }
+if ((Get-NpmValue 'registry') -ne 'https://example.invalid/') { throw 'cached registry not read' }
+if ((Get-NpmValue 'strict-ssl') -ine 'false') { throw 'disabled TLS setting lost' }
 $env:NODE_USE_ENV_PROXY = '0'
 __PROXY_SETUP__
 if ($env:NODE_USE_ENV_PROXY -ne '0') { throw 'explicit proxy opt-out was changed' }

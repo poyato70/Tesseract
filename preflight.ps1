@@ -6,6 +6,7 @@ param(
     [int]$NetworkTimeoutSeconds = 6,
     [switch]$SkipAzureEndpointChecks,
     [switch]$ExportReport,
+    [switch]$OutBB,
     [string]$ReportPath
 )
 
@@ -13,19 +14,23 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 Import-Module (Join-Path $PSScriptRoot 'scripts\preflight-core.psm1') -Force
 $checks = [System.Collections.Generic.List[object]]::new()
+$npmConfig = $null
 function Add-PreflightCheck {
     param([string]$Category, [string]$Name, [ValidateSet('APROVADO', 'AVISO', 'BLOQUEADO', 'INFORMATIVO')][string]$State, [string]$Summary)
     $checks.Add([pscustomobject]@{ Category = $Category; Name = $Name; State = $State; Summary = $Summary }) | Out-Null
 }
 function Get-NpmValue {
     param([string]$Name)
-    $command = Get-Command npm.cmd -ErrorAction SilentlyContinue
-    if (-not $command) { return '' }
-    try {
-        $lines = & $command.Source config get $Name 2>$null
-        if ($LASTEXITCODE -ne 0) { return '' }
-        return [string]($lines | Select-Object -Last 1).Trim()
-    } catch { return '' }
+    if (-not $npmConfig) { return '' }
+    $property = $npmConfig.PSObject.Properties[$Name]
+    if (-not $property) { return '' }
+    return [string]$property.Value
+}
+function Get-NpmConfigArguments {
+    param([switch]$UseDefaultRegistry)
+    $arguments = @('config', 'list', '--json')
+    if ($UseDefaultRegistry) { $arguments += '--registry=https://registry.npmjs.org/' }
+    return $arguments
 }
 function Test-ConfiguredBoolean {
     param([string]$Value)
@@ -160,10 +165,14 @@ if (-not [Environment]::Is64BitOperatingSystem) { Add-PreflightCheck 'Sistema' '
 else { Add-PreflightCheck 'Sistema' 'Arquitetura' 'APROVADO' "Processo $env:PROCESSOR_ARCHITECTURE em Windows 64 bits." }
 
 $nodeCommand = Get-Command node.exe -ErrorAction SilentlyContinue
+$nodeAvailable = $false
 if (-not $nodeCommand) { Add-PreflightCheck 'Ferramentas' 'Node.js' 'BLOQUEADO' 'Node.js não está no PATH. Instale Node.js 24 LTS (24.6+) ou 22 LTS (22.21+) pelo procedimento corporativo e reabra o terminal.' }
 else {
     $nodeVersionText = ''
-    try { $nodeVersionText = (& $nodeCommand.Source --version 2>$null).Trim() } catch { }
+    try {
+        $nodeVersionText = (& $nodeCommand.Source --version 2>$null).Trim()
+        $nodeAvailable = $LASTEXITCODE -eq 0
+    } catch { $nodeAvailable = $false }
     $nodeMatch = [regex]::Match($nodeVersionText, '^v(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)')
     $nodeSupported = $false
     if ($nodeMatch.Success) { $major = [int]$nodeMatch.Groups['major'].Value; $minor = [int]$nodeMatch.Groups['minor'].Value; $nodeSupported = ($major -eq 24 -and $minor -ge 6) -or ($major -eq 22 -and $minor -ge 21) }
@@ -182,28 +191,54 @@ else {
 }
 
 $npmCommand = Get-Command npm.cmd -ErrorAction SilentlyContinue
-if (-not $npmCommand) { Add-PreflightCheck 'Ferramentas' 'npm' 'BLOQUEADO' 'npm.cmd não está no PATH.' }
+if (-not $nodeAvailable) {
+    Add-PreflightCheck 'Ferramentas' 'npm' 'INFORMATIVO' 'Não validado: Node.js não está disponível para executar npm. Corrija primeiro o bloqueio Node.js.'
+} elseif (-not $npmCommand) { Add-PreflightCheck 'Ferramentas' 'npm' 'BLOQUEADO' 'npm.cmd não está no PATH.' }
 else {
     $npmVersionText = ''
-    try { $npmVersionText = (& $npmCommand.Source --version 2>$null | Select-Object -Last 1).Trim() } catch { }
+    $npmSucceeded = $false
+    try {
+        $npmVersionText = (& $npmCommand.Source --version 2>$null | Select-Object -Last 1).Trim()
+        $npmSucceeded = $LASTEXITCODE -eq 0
+    } catch { $npmSucceeded = $false }
     $npmMatch = [regex]::Match($npmVersionText, '^(?<major>\d+)\.(?<minor>\d+)')
-    if ($npmMatch.Success -and [int]$npmMatch.Groups['major'].Value -ge 9) { Add-PreflightCheck 'Ferramentas' 'npm' 'APROVADO' "npm $npmVersionText disponível." }
-    else { Add-PreflightCheck 'Ferramentas' 'npm' 'BLOQUEADO' 'Requer npm 9 ou superior.' }
-    $npxCommand = Get-Command npx.cmd -ErrorAction SilentlyContinue
-    if ($npxCommand) { Add-PreflightCheck 'Ferramentas' 'npx' 'APROVADO' 'npx.cmd disponível com a instalação atual do Node.js/npm.' }
-    else { Add-PreflightCheck 'Ferramentas' 'npx' 'BLOQUEADO' 'npx.cmd não está no PATH.' }
+    if (-not $npmSucceeded -or -not $npmMatch.Success) {
+        Add-PreflightCheck 'Ferramentas' 'npm' 'BLOQUEADO' 'npm.cmd foi encontrado, mas não foi possível executar e identificar sua versão. Revise a instalação de Node.js/npm e o PATH.'
+    } elseif ([int]$npmMatch.Groups['major'].Value -lt 9) {
+        Add-PreflightCheck 'Ferramentas' 'npm' 'BLOQUEADO' 'Requer npm 9 ou superior.'
+    } else {
+        Add-PreflightCheck 'Ferramentas' 'npm' 'APROVADO' "npm $npmVersionText disponível."
+        try {
+            $configArguments = Get-NpmConfigArguments -UseDefaultRegistry:$OutBB
+            $configLines = & $npmCommand.Source @configArguments 2>$null
+            if ($LASTEXITCODE -ne 0) { throw 'npm config failed' }
+            $npmConfig = ($configLines -join [Environment]::NewLine) | ConvertFrom-Json -ErrorAction Stop
+            if (-not $npmConfig) { throw 'npm config empty' }
+        } catch {
+            $npmConfig = $null
+            Add-PreflightCheck 'Ferramentas' 'Configuração npm' 'BLOQUEADO' 'Falha ao consultar a configuração efetiva do npm. Revise a instalação e o .npmrc; detalhes foram ocultados para proteger credenciais.'
+        }
+    }
+}
 
-    $gitCommand = Get-Command git.exe -ErrorAction SilentlyContinue
-    if ($gitCommand) {
-        $gitVersionText = (& $gitCommand.Source --version 2>$null | Select-Object -Last 1).Trim()
-        Add-PreflightCheck 'Ferramentas' 'Git' 'APROVADO' "$gitVersionText disponível."
-    } else { Add-PreflightCheck 'Ferramentas' 'Git' 'BLOQUEADO' 'Git não está no PATH; é necessário para clonar e atualizar.' }
+$npxCommand = Get-Command npx.cmd -ErrorAction SilentlyContinue
+if (-not $npmConfig) { Add-PreflightCheck 'Ferramentas' 'npx' 'INFORMATIVO' 'Não validado: depende de Node.js/npm funcionais; a presença de npx.cmd não comprova execução.' }
+elseif ($npxCommand) { Add-PreflightCheck 'Ferramentas' 'npx' 'APROVADO' 'npx.cmd disponível com a instalação atual do Node.js/npm.' }
+else { Add-PreflightCheck 'Ferramentas' 'npx' 'BLOQUEADO' 'npx.cmd não está no PATH.' }
 
+$gitCommand = Get-Command git.exe -ErrorAction SilentlyContinue
+if ($gitCommand) {
+    $gitVersionText = (& $gitCommand.Source --version 2>$null | Select-Object -Last 1).Trim()
+    Add-PreflightCheck 'Ferramentas' 'Git' 'APROVADO' "$gitVersionText disponível."
+} else { Add-PreflightCheck 'Ferramentas' 'Git' 'BLOQUEADO' 'Git não está no PATH; é necessário para clonar e atualizar.' }
+
+if ($npmConfig) {
     $registry = Get-NpmValue 'registry'
     $registryUri = $null
     try { $registryUri = [Uri]$registry } catch { }
     if ($registryUri -and $registryUri.IsAbsoluteUri) {
-        Add-PreflightCheck 'Rede' 'Registry npm configurado' 'INFORMATIVO' "Scheme $($registryUri.Scheme); host oculto no relatório."
+        $registrySummary = if ($OutBB) { 'Registry padrão do npm selecionado por -OutBB; host oculto no relatório.' } else { "Scheme $($registryUri.Scheme); host oculto no relatório." }
+        Add-PreflightCheck 'Rede' 'Registry npm configurado' 'INFORMATIVO' $registrySummary
         $registryProbe = [UriBuilder]::new($registryUri); $registryProbe.UserName = ''; $registryProbe.Password = ''; $registryProbe.Query = ''; $registryProbe.Fragment = ''
         Test-Endpoint -Label 'Registry npm' -RawUri $registryProbe.Uri.AbsoluteUri -TimeoutSeconds $NetworkTimeoutSeconds
     } else { Add-PreflightCheck 'Rede' 'Registry npm configurado' 'BLOQUEADO' 'Não foi possível interpretar o registry configurado. O valor foi ocultado.' }
@@ -211,15 +246,18 @@ else {
     $strictSsl = Get-NpmValue 'strict-ssl'
     if ($strictSsl -and $strictSsl.ToLowerInvariant() -eq 'false') { Add-PreflightCheck 'TLS' 'Validação npm' 'BLOQUEADO' 'npm strict-ssl está desativado; o preflight não alterará a configuração.' }
     else { Add-PreflightCheck 'TLS' 'Validação npm' 'APROVADO' 'Validação TLS do npm não está explicitamente desativada.' }
-    $cafile = Get-NpmValue 'cafile'
-    $caConfigured = (Test-ConfiguredBoolean $env:NODE_EXTRA_CA_CERTS) -or ($env:NODE_USE_SYSTEM_CA -eq '1') -or (Test-ConfiguredBoolean $env:SSL_CERT_FILE) -or (Test-ConfiguredBoolean $env:SSL_CERT_DIR) -or (Test-ConfiguredBoolean $cafile)
-    $caSummary = if ($caConfigured) { 'Configuração adicional de CA detectada; valores e caminhos ocultados.' } else { 'Nenhuma configuração adicional de CA detectada.' }
-    Add-PreflightCheck 'TLS' 'CA adicional' 'INFORMATIVO' $caSummary
-    if ($env:NODE_TLS_REJECT_UNAUTHORIZED -eq '0') { Add-PreflightCheck 'TLS' 'Validação TLS do Node.js' 'BLOQUEADO' 'NODE_TLS_REJECT_UNAUTHORIZED está configurado para desativar validação. O valor não foi exibido.' }
+} else {
+    Add-PreflightCheck 'Rede' 'Registry npm configurado' 'INFORMATIVO' 'Não validado: a configuração efetiva depende de npm funcional. Nenhuma falha de registry ou DNS foi inferida.'
+    Add-PreflightCheck 'TLS' 'Validação npm' 'INFORMATIVO' 'Não validada: não foi possível consultar strict-ssl sem configuração npm disponível.'
 }
+$cafile = Get-NpmValue 'cafile'
+$caConfigured = (Test-ConfiguredBoolean $env:NODE_EXTRA_CA_CERTS) -or ($env:NODE_USE_SYSTEM_CA -eq '1') -or (Test-ConfiguredBoolean $env:SSL_CERT_FILE) -or (Test-ConfiguredBoolean $env:SSL_CERT_DIR) -or (Test-ConfiguredBoolean $cafile)
+$caSummary = if ($caConfigured) { 'Configuração adicional de CA detectada; valores e caminhos ocultados.' } else { 'Nenhuma configuração adicional de CA detectada.' }
+Add-PreflightCheck 'TLS' 'CA adicional' 'INFORMATIVO' $caSummary
+if ($env:NODE_TLS_REJECT_UNAUTHORIZED -eq '0') { Add-PreflightCheck 'TLS' 'Validação TLS do Node.js' 'BLOQUEADO' 'NODE_TLS_REJECT_UNAUTHORIZED está configurado para desativar validação. O valor não foi exibido.' }
 
 $proxyConfigured = (Test-ConfiguredBoolean $env:HTTPS_PROXY) -or (Test-ConfiguredBoolean $env:https_proxy) -or (Test-ConfiguredBoolean $env:HTTP_PROXY) -or (Test-ConfiguredBoolean $env:http_proxy) -or (Test-ConfiguredBoolean (Get-NpmValue 'https-proxy')) -or (Test-ConfiguredBoolean (Get-NpmValue 'proxy'))
-$proxySummary = if ($proxyConfigured) { 'Proxy configurado detectado; endereços e credenciais ocultados.' } else { 'Nenhum proxy de ambiente ou npm detectado; configuração de sistema não foi alterada.' }
+$proxySummary = if ($proxyConfigured) { 'Proxy configurado detectado; endereços e credenciais ocultados.' } elseif (-not $npmConfig) { 'Nenhum proxy de ambiente detectado; proxy npm não pôde ser consultado. Configuração de sistema não foi alterada.' } else { 'Nenhum proxy de ambiente ou npm detectado; configuração de sistema não foi alterada.' }
 Add-PreflightCheck 'Rede' 'Proxy' 'INFORMATIVO' $proxySummary
 if ($proxyConfigured -and $env:NODE_USE_ENV_PROXY -eq '0') { Add-PreflightCheck 'Rede' 'Proxy do serviço' 'BLOQUEADO' 'NODE_USE_ENV_PROXY está explicitamente desativado enquanto há proxy configurado; o valor não foi alterado.' }
 if ($SkipAzureEndpointChecks) {
